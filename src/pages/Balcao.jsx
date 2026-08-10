@@ -49,8 +49,32 @@ export default function Balcao() {
     telefone: '',
     email: '',
     cpf: '',
+    cep: '',
     endereco: ''
   });
+
+  const handleCepChange = async (e) => {
+    const cep = e.target.value.replace(/\D/g, '');
+    setClientForm({ ...clientForm, cep: e.target.value });
+    
+    if (cep.length === 8) {
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setClientForm(prev => ({
+            ...prev,
+            cep: e.target.value,
+            endereco: `${data.logradouro},  - ${data.bairro}, ${data.localidade} - ${data.uf}`
+          }));
+        } else {
+          if(addAlerta) addAlerta({ type: 'warning', message: 'CEP não encontrado' });
+        }
+      } catch (error) {
+        console.error("Erro ao buscar CEP:", error);
+      }
+    }
+  };
 
   // Derived data
   const osAtivas = ordensServico ? ordensServico.filter(os => !['concluido', 'cancelado'].includes(os.status.toLowerCase())) : [];
@@ -149,6 +173,7 @@ export default function Balcao() {
       telefone: '',
       email: '',
       cpf: '',
+      cep: '',
       endereco: ''
     });
   };
@@ -513,15 +538,29 @@ export default function Balcao() {
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Endereço</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={clientForm.endereco} 
-                  onChange={(e) => setClientForm({...clientForm, endereco: e.target.value})}
-                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '15px', marginBottom: '20px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>CEP</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={clientForm.cep} 
+                    onChange={handleCepChange}
+                    maxLength="9"
+                    placeholder="00000-000"
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Endereço</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={clientForm.endereco} 
+                    onChange={(e) => setClientForm({...clientForm, endereco: e.target.value})}
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  />
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
