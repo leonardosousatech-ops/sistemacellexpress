@@ -207,6 +207,21 @@ export default function Login() {
           }}>
             Contas de demonstração
           </p>
+          <div style={{ padding: '20px', borderTop: '1px solid var(--border-color, #2a2a2a)', backgroundColor: 'var(--bg-primary, #0a0a0a)', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <p style={{ margin: '0 0 15px 0', fontSize: '12px', color: 'var(--text-secondary, #A0A0A0)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                CONTA ADMINISTRATIVA
+              </p>
+              
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#fff', fontWeight: 'bold' }}>admin@cellexpress.com</span>
+                    <span style={{ color: 'var(--text-secondary, #A0A0A0)', fontSize: '11px' }}>Gerente (Acesso Total)</span>
+                  </div>
+                  <span style={{ color: 'var(--accent-color, #FFD700)', fontWeight: 'bold' }}>senha: 123</span>
+                </div>
+              </div>
+            </div>         
           {[
             { email: 'leo@cellexpress.com', cargo: 'Gerente (Acesso Total)' },
             { email: 'ana@cellexpress.com', cargo: 'Atendente (Balcão)' },
