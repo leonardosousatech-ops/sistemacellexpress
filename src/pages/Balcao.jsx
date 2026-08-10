@@ -1,0 +1,526 @@
+import React, { useState, useMemo } from 'react';
+import { useData, useAuth } from '../App';
+import { 
+  Users, 
+  Wrench, 
+  CheckCircle, 
+  ShoppingCart, 
+  Plus, 
+  Search, 
+  AlertTriangle,
+  X,
+  FileText,
+  Smartphone,
+} from 'lucide-react';
+
+export default function Balcao() {
+  const { 
+    clientes, 
+    setClientes, 
+    ordensServico, 
+    setOrdensServico, 
+    addAtividade, 
+    addAlerta 
+  } = useData();
+  
+  // const { user } = useAuth(); // If needed for context
+
+  // Modals state
+  const [isOsModalOpen, setIsOsModalOpen] = useState(false);
+  const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+
+  // Filters state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  // Form states
+  const [osForm, setOsForm] = useState({
+    clienteId: '',
+    tipoAparelho: 'Celular',
+    modelo: '',
+    condicao: '',
+    problema: '',
+    prioridade: 'Normal'
+  });
+
+  const [clientForm, setClientForm] = useState({
+    nome: '',
+    telefone: '',
+    email: '',
+    cpf: '',
+    endereco: ''
+  });
+
+  // Derived data
+  const osAtivas = ordensServico ? ordensServico.filter(os => !['concluido', 'cancelado'].includes(os.status.toLowerCase())) : [];
+  const osProntas = ordensServico ? ordensServico.filter(os => os.status.toLowerCase() === 'pronto') : [];
+  const vendasDia = 0; // Placeholder for actual sales data
+
+  const filteredOS = useMemo(() => {
+    if (!ordensServico) return [];
+    return ordensServico.filter(os => {
+      const cliente = clientes?.find(c => c.id === os.clienteId);
+      const matchesSearch = 
+        os.id.toString().includes(searchQuery) ||
+        (cliente && cliente.nome.toLowerCase().includes(searchQuery.toLowerCase()));
+      
+      const matchesStatus = filterStatus === 'all' || os.status.toLowerCase() === filterStatus.toLowerCase();
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [ordensServico, searchQuery, filterStatus, clientes]);
+
+  const handleCreateOS = (e) => {
+    e.preventDefault();
+    if (!osForm.clienteId || !osForm.modelo || !osForm.problema) {
+      if(addAlerta) addAlerta({ type: 'warning', message: 'Preencha todos os campos obrigatórios' });
+      return;
+    }
+
+    const newId = (ordensServico && ordensServico.length > 0) ? Math.max(...ordensServico.map(os => os.id)) + 1 : 1000;
+    
+    const novaOS = {
+      id: newId,
+      clienteId: parseInt(osForm.clienteId),
+      tipoAparelho: osForm.tipoAparelho,
+      modelo: osForm.modelo,
+      condicao: osForm.condicao,
+      problema: osForm.problema,
+      prioridade: osForm.prioridade,
+      status: 'Aguardando Avaliação',
+      dataEntrada: new Date().toISOString(),
+      tecnicoId: null,
+      valorTotal: 0
+    };
+
+    setOrdensServico([...(ordensServico || []), novaOS]);
+    
+    const clienteNome = clientes?.find(c => c.id === novaOS.clienteId)?.nome || 'Cliente';
+    if(addAtividade) addAtividade('OS Criada', `OS #${newId} - ${osForm.modelo} - ${clienteNome}`, 'balcao');
+    if(addAlerta) addAlerta({ type: 'success', message: 'Ordem de serviço criada com sucesso!' });
+    
+    setIsOsModalOpen(false);
+    setOsForm({
+      clienteId: '',
+      tipoAparelho: 'Celular',
+      modelo: '',
+      condicao: '',
+      problema: '',
+      prioridade: 'Normal'
+    });
+  };
+
+  const handleCreateClient = (e) => {
+    e.preventDefault();
+    if (!clientForm.nome || !clientForm.telefone) {
+      if(addAlerta) addAlerta({ type: 'warning', message: 'Nome e telefone são obrigatórios' });
+      return;
+    }
+
+    const newId = (clientes && clientes.length > 0) ? Math.max(...clientes.map(c => c.id)) + 1 : 1;
+    
+    const novoCliente = {
+      id: newId,
+      ...clientForm,
+      dataCadastro: new Date().toISOString()
+    };
+
+    setClientes([...(clientes || []), novoCliente]);
+    if(addAtividade) addAtividade('Cliente Cadastrado', `Cliente ${novoCliente.nome} cadastrado via balcão`, 'balcao');
+    if(addAlerta) addAlerta({ type: 'success', message: 'Cliente cadastrado com sucesso!' });
+    
+    setIsClientModalOpen(false);
+    setOsForm({ ...osForm, clienteId: newId });
+    setIsOsModalOpen(true);
+    
+    setClientForm({
+      nome: '',
+      telefone: '',
+      email: '',
+      cpf: '',
+      endereco: ''
+    });
+  };
+
+  const getStatusBadgeClass = (status) => {
+    const s = status.toLowerCase();
+    if (s.includes('pronto')) return 'badge-success';
+    if (s.includes('aguardando')) return 'badge-warning';
+    if (s.includes('bancada')) return 'badge-info';
+    if (s.includes('cancelado')) return 'badge-danger';
+    return 'badge-neutral';
+  };
+
+  const getPriorityBadgeClass = (prioridade) => {
+    const p = prioridade.toLowerCase();
+    if (p === 'urgente') return 'badge-danger';
+    if (p === 'alta') return 'badge-warning';
+    if (p === 'normal') return 'badge-info';
+    return 'badge-neutral';
+  };
+
+  return (
+    <div className="page-container" style={{ padding: '20px', backgroundColor: 'var(--bg-primary, #0a0a0a)', minHeight: '100vh', color: 'var(--text-primary, #FFFFFF)' }}>
+      <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <div>
+          <h1 style={{ margin: 0 }}>Balcão de Atendimento</h1>
+          <p style={{ color: 'var(--text-secondary, #A0A0A0)', margin: '5px 0 0 0' }}>Gestão de ordens de serviço, clientes e vendas</p>
+        </div>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button className="btn btn-secondary" onClick={() => setIsClientModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '10px 15px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}>
+            <Users size={18} /> Novo Cliente
+          </button>
+          <button className="btn btn-primary" onClick={() => setIsOsModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '10px 15px', backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+            <FileText size={18} /> Nova OS
+          </button>
+        </div>
+      </header>
+
+      {/* Alert Banner */}
+      {osProntas.length > 0 && (
+        <div style={{ 
+          backgroundColor: 'rgba(255, 170, 0, 0.15)', 
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          color: 'var(--accent-yellow)', 
+          padding: '16px 20px', 
+          borderRadius: '8px', 
+          marginBottom: '20px', 
+          border: '1px solid rgba(255, 215, 0, 0.3)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 'bold', fontSize: '1.05rem' }}>
+            <AlertTriangle size={24} />
+            <span>{osProntas.length} aparelho(s) pronto(s) para retirada! Entrar em contato com o cliente:</span>
+          </div>
+          <ul style={{ marginTop: '12px', paddingLeft: '34px', listStyleType: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {osProntas.map(os => {
+              const cliente = clientes?.find(c => c.id === (os.clienteId || os.id_cliente));
+              return (
+                <li key={os.id} style={{ fontSize: '0.9rem', color: '#fff' }}>
+                  <strong style={{ color: 'var(--accent-yellow)' }}>OS #{os.id}</strong> — {os.tipoAparelho || os.tipo_aparelho} {os.modelo} 
+                  <span style={{ color: 'var(--text-secondary, #A0A0A0)', marginLeft: '6px' }}>({cliente?.nome || 'Cliente Desconhecido'})</span>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* KPI Cards */}
+      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
+        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Ativas</h3>
+            <Wrench size={20} color="var(--info-color, #3B82F6)" />
+          </div>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osAtivas.length}</p>
+        </div>
+        
+        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Prontas</h3>
+            <CheckCircle size={20} color="var(--success-color, #25D366)" />
+          </div>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osProntas.length}</p>
+        </div>
+
+        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Clientes Cadastrados</h3>
+            <Users size={20} color="var(--accent-color, #FFD700)" />
+          </div>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{clientes?.length || 0}</p>
+        </div>
+
+        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Vendas do Dia</h3>
+            <ShoppingCart size={20} color="var(--success-color, #25D366)" />
+          </div>
+          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>R$ {vendasDia.toFixed(2)}</p>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
+        {/* OS Table Section */}
+        <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Ordens de Serviço</h2>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <div className="search-bar" style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary, #0a0a0a)', padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+                <Search size={16} color="var(--text-secondary, #A0A0A0)" style={{ marginRight: '5px' }} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar OS ou Cliente" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none' }}
+                />
+              </div>
+              <select 
+                value={filterStatus} 
+                onChange={(e) => setFilterStatus(e.target.value)}
+                style={{ backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', padding: '5px 10px', borderRadius: '4px' }}
+              >
+                <option value="all">Todos os Status</option>
+                <option value="aguardando avaliação">Aguardando Avaliação</option>
+                <option value="na bancada">Na Bancada</option>
+                <option value="pronto">Pronto</option>
+                <option value="concluido">Concluído</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)' }}>
+                  <th style={{ padding: '10px' }}>ID</th>
+                  <th style={{ padding: '10px' }}>Cliente</th>
+                  <th style={{ padding: '10px' }}>Aparelho</th>
+                  <th style={{ padding: '10px' }}>Status</th>
+                  <th style={{ padding: '10px' }}>Prioridade</th>
+                  <th style={{ padding: '10px' }}>Data Entrada</th>
+                  <th style={{ padding: '10px' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOS.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary, #A0A0A0)' }}>Nenhuma OS encontrada.</td>
+                  </tr>
+                ) : (
+                  filteredOS.map(os => (
+                    <tr key={os.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)' }}>
+                      <td data-label="ID" style={{ padding: '10px' }}>#{os.id}</td>
+                      <td data-label="Cliente" style={{ padding: '10px' }}>{clientes?.find(c => c.id === os.clienteId)?.nome || 'Desconhecido'}</td>
+                      <td data-label="Aparelho" style={{ padding: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Smartphone size={14} />
+                          {os.modelo}
+                        </div>
+                      </td>
+                      <td data-label="Status" style={{ padding: '10px' }}>
+                        <span className={`status-badge`} style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getStatusBadgeClass(os.status).includes('success') ? 'var(--success-color, #25D366)' : getStatusBadgeClass(os.status).includes('warning') ? 'var(--warning-color, #FFAA00)' : 'var(--info-color, #3B82F6)', color: '#000' }}>
+                          {os.status}
+                        </span>
+                      </td>
+                      <td data-label="Prioridade" style={{ padding: '10px' }}>
+                        <span className={`status-badge`} style={{ padding: '3px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: getPriorityBadgeClass(os.prioridade).includes('danger') ? 'var(--danger-color, #FF4444)' : getPriorityBadgeClass(os.prioridade).includes('warning') ? 'var(--warning-color, #FFAA00)' : 'var(--info-color, #3B82F6)', color: '#fff' }}>
+                          {os.prioridade}
+                        </span>
+                      </td>
+                      <td data-label="Data Entrada" style={{ padding: '10px' }}>{new Date(os.dataEntrada).toLocaleDateString('pt-BR')}</td>
+                      <td data-label="Ações" style={{ padding: '10px' }}>
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }}>Detalhes</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Quick Sales Section */}
+        <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <h2 style={{ margin: 0, fontSize: '18px', marginBottom: '15px' }}>Venda Rápida</h2>
+          <div style={{ padding: '20px', textAlign: 'center', border: '1px dashed var(--border-color, #2a2a2a)', borderRadius: '8px' }}>
+            <ShoppingCart size={32} color="var(--text-secondary, #A0A0A0)" style={{ margin: '0 auto 10px auto' }} />
+            <p style={{ color: 'var(--text-secondary, #A0A0A0)' }}>Módulo de vendas (acessórios e produtos) em desenvolvimento.</p>
+          </div>
+        </section>
+      </div>
+
+      {/* New OS Modal */}
+      {isOsModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Nova Ordem de Serviço</h2>
+              <button onClick={() => setIsOsModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateOS}>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Cliente *</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select 
+                    className="form-input" 
+                    value={osForm.clienteId} 
+                    onChange={(e) => setOsForm({...osForm, clienteId: e.target.value})}
+                    required
+                    style={{ flex: 1, padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  >
+                    <option value="">Selecione um cliente...</option>
+                    {clientes?.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome} - {c.telefone}</option>
+                    ))}
+                  </select>
+                  <button type="button" className="btn btn-secondary" onClick={() => { setIsOsModalOpen(false); setIsClientModalOpen(true); }} style={{ padding: '0 15px', backgroundColor: 'var(--bg-primary, #0a0a0a)', border: '1px solid var(--border-color, #2a2a2a)', color: '#fff', borderRadius: '4px', cursor: 'pointer' }}>
+                    <Plus size={20} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Tipo de Aparelho</label>
+                  <select 
+                    className="form-input" 
+                    value={osForm.tipoAparelho} 
+                    onChange={(e) => setOsForm({...osForm, tipoAparelho: e.target.value})}
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  >
+                    <option value="Celular">Celular</option>
+                    <option value="Tablet">Tablet</option>
+                    <option value="Notebook">Notebook</option>
+                    <option value="Computador">Computador</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Prioridade</label>
+                  <select 
+                    className="form-input" 
+                    value={osForm.prioridade} 
+                    onChange={(e) => setOsForm({...osForm, prioridade: e.target.value})}
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  >
+                    <option value="Baixa">Baixa</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Urgente">Urgente</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Modelo do Aparelho *</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={osForm.modelo} 
+                  onChange={(e) => setOsForm({...osForm, modelo: e.target.value})}
+                  required
+                  placeholder="Ex: iPhone 13 Pro Max"
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Problema Relatado *</label>
+                <textarea 
+                  className="form-input" 
+                  value={osForm.problema} 
+                  onChange={(e) => setOsForm({...osForm, problema: e.target.value})}
+                  required
+                  rows={3}
+                  placeholder="Descreva o problema relatado pelo cliente"
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Condição do Aparelho</label>
+                <textarea 
+                  className="form-input" 
+                  value={osForm.condicao} 
+                  onChange={(e) => setOsForm({...osForm, condicao: e.target.value})}
+                  rows={2}
+                  placeholder="Marcas de uso, arranhões, etc"
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsOsModalOpen(false)} style={{ padding: '10px 20px', backgroundColor: 'transparent', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ padding: '10px 20px', backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Salvar OS</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* New Client Modal */}
+      {isClientModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '500px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Novo Cliente</h2>
+              <button onClick={() => setIsClientModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCreateClient}>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Nome Completo *</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={clientForm.nome} 
+                  onChange={(e) => setClientForm({...clientForm, nome: e.target.value})}
+                  required
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Telefone (WhatsApp) *</label>
+                  <input 
+                    type="tel" 
+                    className="form-input" 
+                    value={clientForm.telefone} 
+                    onChange={(e) => setClientForm({...clientForm, telefone: e.target.value})}
+                    required
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>CPF</label>
+                  <input 
+                    type="text" 
+                    className="form-input" 
+                    value={clientForm.cpf} 
+                    onChange={(e) => setClientForm({...clientForm, cpf: e.target.value})}
+                    style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>E-mail</label>
+                <input 
+                  type="email" 
+                  className="form-input" 
+                  value={clientForm.email} 
+                  onChange={(e) => setClientForm({...clientForm, email: e.target.value})}
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Endereço</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={clientForm.endereco} 
+                  onChange={(e) => setClientForm({...clientForm, endereco: e.target.value})}
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setIsClientModalOpen(false)} style={{ padding: '10px 20px', backgroundColor: 'transparent', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }}>Cancelar</button>
+                <button type="submit" className="btn btn-primary" style={{ padding: '10px 20px', backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Salvar Cliente</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
