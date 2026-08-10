@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData, useAuth } from '../App';
+import { supabase } from '../supabaseClient';
 import { 
   Users, 
   Wrench, 
@@ -70,33 +71,35 @@ export default function Balcao() {
     });
   }, [ordensServico, searchQuery, filterStatus, clientes]);
 
-  const handleCreateOS = (e) => {
+  const handleCreateOS = async (e) => {
     e.preventDefault();
     if (!osForm.clienteId || !osForm.modelo || !osForm.problema) {
       if(addAlerta) addAlerta({ type: 'warning', message: 'Preencha todos os campos obrigatórios' });
       return;
     }
 
-    const newId = (ordensServico && ordensServico.length > 0) ? Math.max(...ordensServico.map(os => os.id)) + 1 : 1000;
-    
     const novaOS = {
-      id: newId,
-      clienteId: parseInt(osForm.clienteId),
-      tipoAparelho: osForm.tipoAparelho,
+      id_cliente: parseInt(osForm.clienteId),
+      tipo_aparelho: osForm.tipoAparelho,
       modelo: osForm.modelo,
       condicao: osForm.condicao,
       problema: osForm.problema,
-      prioridade: osForm.prioridade,
-      status: 'Aguardando Avaliação',
-      dataEntrada: new Date().toISOString(),
-      tecnicoId: null,
-      valorTotal: 0
+      prioridade: osForm.prioridade.toLowerCase(),
+      status: 'na-fila'
     };
 
-    setOrdensServico([...(ordensServico || []), novaOS]);
+    const { data, error } = await supabase.from('ordens_servico').insert([novaOS]).select();
+
+    if (error) {
+      console.error(error);
+      if(addAlerta) addAlerta({ type: 'error', message: 'Erro ao criar OS no banco.' });
+      return;
+    }
+
+    setOrdensServico([...(ordensServico || []), data[0]]);
     
-    const clienteNome = clientes?.find(c => c.id === novaOS.clienteId)?.nome || 'Cliente';
-    if(addAtividade) addAtividade('OS Criada', `OS #${newId} - ${osForm.modelo} - ${clienteNome}`, 'balcao');
+    const clienteNome = clientes?.find(c => c.id === novaOS.id_cliente)?.nome || 'Cliente';
+    if(addAtividade) addAtividade('OS Criada', `OS #${data[0].id} - ${osForm.modelo} - ${clienteNome}`, 'balcao');
     if(addAlerta) addAlerta({ type: 'success', message: 'Ordem de serviço criada com sucesso!' });
     
     setIsOsModalOpen(false);
@@ -110,27 +113,35 @@ export default function Balcao() {
     });
   };
 
-  const handleCreateClient = (e) => {
+  const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!clientForm.nome || !clientForm.telefone) {
       if(addAlerta) addAlerta({ type: 'warning', message: 'Nome e telefone são obrigatórios' });
       return;
     }
 
-    const newId = (clientes && clientes.length > 0) ? Math.max(...clientes.map(c => c.id)) + 1 : 1;
-    
     const novoCliente = {
-      id: newId,
-      ...clientForm,
-      dataCadastro: new Date().toISOString()
+      nome: clientForm.nome,
+      telefone: clientForm.telefone,
+      email: clientForm.email,
+      cpf: clientForm.cpf,
+      endereco: clientForm.endereco
     };
 
-    setClientes([...(clientes || []), novoCliente]);
+    const { data, error } = await supabase.from('clientes').insert([novoCliente]).select();
+
+    if (error) {
+      console.error(error);
+      if(addAlerta) addAlerta({ type: 'error', message: 'Erro ao criar cliente no banco.' });
+      return;
+    }
+
+    setClientes([...(clientes || []), data[0]]);
     if(addAtividade) addAtividade('Cliente Cadastrado', `Cliente ${novoCliente.nome} cadastrado via balcão`, 'balcao');
     if(addAlerta) addAlerta({ type: 'success', message: 'Cliente cadastrado com sucesso!' });
     
     setIsClientModalOpen(false);
-    setOsForm({ ...osForm, clienteId: newId });
+    setOsForm({ ...osForm, clienteId: data[0].id });
     setIsOsModalOpen(true);
     
     setClientForm({
