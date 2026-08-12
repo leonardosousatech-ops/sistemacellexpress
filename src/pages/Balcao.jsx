@@ -12,6 +12,9 @@ import {
   X,
   FileText,
   Smartphone,
+  Bot,
+  Trash2,
+  PlusCircle
 } from 'lucide-react';
 
 export default function Balcao() {
@@ -20,6 +23,9 @@ export default function Balcao() {
     setClientes, 
     ordensServico, 
     setOrdensServico, 
+    estoque,
+    setEstoque,
+    setFinanceiro,
     addAtividade, 
     addAlerta 
   } = useData();
@@ -34,6 +40,10 @@ export default function Balcao() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
+  // Sales state
+  const [cart, setCart] = useState([]);
+  const [productSearch, setProductSearch] = useState('');
+
   // Form states
   const [osForm, setOsForm] = useState({
     clienteId: '',
@@ -41,7 +51,8 @@ export default function Balcao() {
     modelo: '',
     condicao: '',
     problema: '',
-    prioridade: 'Normal'
+    prioridade: 'Normal',
+    isChatbot: false
   });
 
   const [clientForm, setClientForm] = useState({
@@ -102,13 +113,16 @@ export default function Balcao() {
       return;
     }
 
+    const finalProblema = osForm.isChatbot ? `[CHATBOT] ${osForm.problema}` : osForm.problema;
+    const finalPrioridade = osForm.isChatbot ? 'urgente' : osForm.prioridade.toLowerCase();
+
     const novaOS = {
       id_cliente: parseInt(osForm.clienteId),
       tipo_aparelho: osForm.tipoAparelho,
       modelo: osForm.modelo,
       condicao: osForm.condicao,
-      problema: osForm.problema,
-      prioridade: osForm.prioridade.toLowerCase(),
+      problema: finalProblema,
+      prioridade: finalPrioridade,
       status: 'na-fila'
     };
 
@@ -133,9 +147,71 @@ export default function Balcao() {
       modelo: '',
       condicao: '',
       problema: '',
-      prioridade: 'Normal'
+      prioridade: 'Normal',
+      isChatbot: false
     });
   };
+
+  const addToCart = (product) => {
+    const existing = cart.find(item => item.id === product.id);
+    if (existing) {
+      if (existing.quantidadeCarrinho >= product.quantidade) {
+        if(addAlerta) addAlerta({ type: 'warning', message: 'Quantidade máxima em estoque atingida!' });
+        return;
+      }
+      setCart(cart.map(item => item.id === product.id ? { ...item, quantidadeCarrinho: item.quantidadeCarrinho + 1 } : item));
+    } else {
+      if (product.quantidade <= 0) {
+        if(addAlerta) addAlerta({ type: 'warning', message: 'Produto sem estoque!' });
+        return;
+      }
+      setCart([...cart, { ...product, quantidadeCarrinho: 1 }]);
+    }
+  };
+
+  const removeFromCart = (id) => {
+    setCart(cart.filter(item => item.id !== id));
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    
+    const total = cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0);
+    
+    // 1. Atualizar estoque
+    for (const item of cart) {
+      const novaQtd = item.quantidade - item.quantidadeCarrinho;
+      await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
+      // Update local state optimistically
+      setEstoque(prev => prev.map(p => p.id === item.id ? { ...p, quantidade: novaQtd } : p));
+    }
+    
+    // 2. Registrar no financeiro
+    const { data: finData, error: finError } = await supabase.from('financeiro').insert([{
+      tipo: 'entrada',
+      categoria: 'venda',
+      valor: total,
+      descricao: `Venda avulsa: ${cart.map(i => `${i.quantidadeCarrinho}x ${i.nome}`).join(', ')}`
+    }]).select();
+
+    if (!finError && finData) {
+      setFinanceiro(prev => [finData[0], ...(prev || [])]);
+    }
+    
+    if (addAtividade) addAtividade('Venda Realizada', `Valor Total: R$ ${total.toFixed(2)}`, 'balcao');
+    if (addAlerta) addAlerta({ type: 'success', message: 'Venda finalizada com sucesso!' });
+    
+    setCart([]);
+    setProductSearch('');
+  };
+
+  const filteredProducts = useMemo(() => {
+    if (!estoque) return [];
+    return estoque.filter(p => p.nome.toLowerCase().includes(productSearch.toLowerCase()) && p.quantidade > 0).slice(0, 5);
+  }, [estoque, productSearch]);
+
+  const cartTotal = cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0);
+
 
   const handleCreateClient = async (e) => {
     e.preventDefault();
@@ -328,7 +404,17 @@ export default function Balcao() {
                 ) : (
                   filteredOS.map(os => (
                     <tr key={os.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)' }}>
-                      <td data-label="ID" style={{ padding: '10px' }}>#{os.id}</td>
+                      <td data-label="ID" style={{ padding: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          #{os.id}
+                          {os.problema?.includes('[CHATBOT]') && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: 'var(--warning-color, #FFAA00)', color: '#000', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold' }}>
+                              <Bot size={12} />
+                              Chatbot
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td data-label="Cliente" style={{ padding: '10px' }}>{clientes?.find(c => c.id === os.clienteId)?.nome || 'Desconhecido'}</td>
                       <td data-label="Aparelho" style={{ padding: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -360,10 +446,81 @@ export default function Balcao() {
 
         {/* Quick Sales Section */}
         <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', marginBottom: '15px' }}>Venda Rápida</h2>
-          <div style={{ padding: '20px', textAlign: 'center', border: '1px dashed var(--border-color, #2a2a2a)', borderRadius: '8px' }}>
-            <ShoppingCart size={32} color="var(--text-secondary, #A0A0A0)" style={{ margin: '0 auto 10px auto' }} />
-            <p style={{ color: 'var(--text-secondary, #A0A0A0)' }}>Módulo de vendas (acessórios e produtos) em desenvolvimento.</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Venda Avulsa</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={18} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  placeholder="Buscar produto..."
+                  value={productSearch}
+                  onChange={e => setProductSearch(e.target.value)}
+                  style={{ padding: '8px 10px 8px 35px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', width: '250px' }}
+                />
+                {productSearch && filteredProducts.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', marginTop: '5px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
+                    {filteredProducts.map(p => (
+                      <div key={p.id} style={{ padding: '10px', borderBottom: '1px solid var(--border-color, #2a2a2a)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.nome}</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #A0A0A0)' }}>Estoque: {p.quantidade} | R$ {p.preco_venda.toFixed(2)}</div>
+                        </div>
+                        <button onClick={() => addToCart(p)} style={{ background: 'none', border: 'none', color: 'var(--success-color, #25D366)', cursor: 'pointer' }}>
+                          <PlusCircle size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{ padding: '20px', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '8px', backgroundColor: 'var(--bg-primary, #0a0a0a)' }}>
+            {cart.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-secondary, #A0A0A0)', padding: '20px 0' }}>
+                <ShoppingCart size={32} color="var(--text-secondary, #A0A0A0)" style={{ margin: '0 auto 10px auto' }} />
+                <p>O carrinho está vazio. Busque produtos acima para adicionar.</p>
+              </div>
+            ) : (
+              <div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)', fontSize: '13px', textAlign: 'left' }}>
+                      <th style={{ padding: '8px' }}>Produto</th>
+                      <th style={{ padding: '8px' }}>Qtd</th>
+                      <th style={{ padding: '8px' }}>Preço Unit.</th>
+                      <th style={{ padding: '8px' }}>Total</th>
+                      <th style={{ padding: '8px', textAlign: 'center' }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cart.map(item => (
+                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', fontSize: '13px' }}>
+                        <td style={{ padding: '8px' }}>{item.nome}</td>
+                        <td style={{ padding: '8px' }}>{item.quantidadeCarrinho}</td>
+                        <td style={{ padding: '8px' }}>R$ {item.preco_venda.toFixed(2)}</td>
+                        <td style={{ padding: '8px' }}>R$ {(item.preco_venda * item.quantidadeCarrinho).toFixed(2)}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-color, #FF4444)', cursor: 'pointer' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color, #2a2a2a)', paddingTop: '15px' }}>
+                  <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
+                    Total: <span style={{ color: 'var(--accent-color, #FFD700)' }}>R$ {cartTotal.toFixed(2)}</span>
+                  </div>
+                  <button onClick={handleCheckout} className="btn btn-primary" style={{ padding: '10px 20px', backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
+                    Finalizar Venda
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -399,6 +556,21 @@ export default function Balcao() {
                     <Plus size={20} />
                   </button>
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#fff' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={osForm.isChatbot} 
+                    onChange={(e) => setOsForm({...osForm, isChatbot: e.target.checked})}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span>
+                    <Bot size={16} style={{ verticalAlign: 'middle', marginRight: '5px', color: 'var(--warning-color, #FFAA00)' }} />
+                    Criado pelo Chatbot
+                  </span>
+                </label>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
