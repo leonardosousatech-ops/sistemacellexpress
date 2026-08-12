@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useData } from '../App'
+import { supabase } from '../supabaseClient'
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
   Plus, X, Search, ArrowUpRight, ArrowDownRight
@@ -61,12 +62,19 @@ export default function Financeiro() {
     return list.sort((a, b) => new Date(b.data) - new Date(a.data))
   }, [financeiro, filterType, searchTerm])
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault()
-    const novo = { id: Date.now(), ...form, valor: parseFloat(form.valor) }
-    setFinanceiro(prev => [...prev, novo])
-    addAtividade('Transação Registrada', `${form.tipo === 'entrada' ? 'Entrada' : 'Saída'}: ${form.descricao} - ${formatCurrency(form.valor)}`, 'financeiro')
-    addAlerta('Transação registrada com sucesso!', 'success')
+    const novo = { ...form, valor: parseFloat(form.valor) }
+    
+    const { data, error } = await supabase.from('financeiro').insert([novo]).select()
+    if (error || !data) {
+      if(addAlerta) addAlerta('Erro ao registrar transação', 'error')
+      return
+    }
+
+    setFinanceiro(prev => [data[0], ...prev])
+    if(addAtividade) addAtividade('Transação Registrada', `${form.tipo === 'entrada' ? 'Entrada' : 'Saída'}: ${form.descricao} - ${formatCurrency(form.valor)}`, 'financeiro')
+    if(addAlerta) addAlerta('Transação registrada com sucesso!', 'success')
     setShowModal(false)
     setForm({ tipo: 'entrada', categoria: 'os', valor: '', descricao: '', data: new Date().toISOString().split('T')[0] })
   }

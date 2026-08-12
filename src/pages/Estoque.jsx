@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../App';
+import { supabase } from '../supabaseClient';
 import { 
   Package, Search, Plus, Edit2, AlertTriangle, 
   ArrowUpRight, ArrowDownRight, Archive, Box, Filter
@@ -94,31 +95,57 @@ export default function Estoque() {
     setIsItemModalOpen(true);
   };
 
-  const handleSaveItem = (e) => {
+  const handleSaveItem = async (e) => {
     e.preventDefault();
     if (editingItem) {
       // Edit
-      setEstoque(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...itemForm } : i));
-      addAtividade(`Item atualizado no estoque: ${itemForm.nome}`);
-    } else {
-      // Add
-      const newItem = {
-        ...itemForm,
-        id: Date.now().toString(),
+      const updates = {
+        nome: itemForm.nome,
+        categoria: itemForm.categoria,
         quantidade: Number(itemForm.quantidade),
         estoque_minimo: Number(itemForm.estoque_minimo),
         preco_custo: Number(itemForm.preco_custo),
         preco_venda: Number(itemForm.preco_venda)
       };
-      setEstoque(prev => [...prev, newItem]);
-      addAtividade(`Novo item adicionado ao estoque: ${itemForm.nome}`);
+      
+      const { error } = await supabase.from('estoque').update(updates).eq('id', editingItem.id);
+      
+      if (error) {
+        if(addAlerta) addAlerta('Erro ao atualizar item', 'error');
+        return;
+      }
+      
+      setEstoque(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...updates } : i));
+      if(addAtividade) addAtividade(`Item atualizado no estoque: ${itemForm.nome}`);
+      if(addAlerta) addAlerta('Item salvo com sucesso', 'success');
+    } else {
+      // Add
+      const newItem = {
+        nome: itemForm.nome,
+        categoria: itemForm.categoria,
+        quantidade: Number(itemForm.quantidade),
+        estoque_minimo: Number(itemForm.estoque_minimo),
+        preco_custo: Number(itemForm.preco_custo),
+        preco_venda: Number(itemForm.preco_venda)
+      };
+      
+      const { data, error } = await supabase.from('estoque').insert([newItem]).select();
+      
+      if (error || !data) {
+        if(addAlerta) addAlerta('Erro ao adicionar item', 'error');
+        return;
+      }
+      
+      setEstoque(prev => [...prev, data[0]]);
+      if(addAtividade) addAtividade(`Novo item adicionado ao estoque: ${itemForm.nome}`);
+      if(addAlerta) addAlerta('Item adicionado com sucesso', 'success');
     }
     setIsItemModalOpen(false);
   };
 
-  const handleSaveMovimento = (e) => {
+  const handleSaveMovimento = async (e) => {
     e.preventDefault();
-    const item = estoque.find(i => i.id === movForm.itemId);
+    const item = estoque.find(i => i.id === Number(movForm.itemId));
     if (!item) return;
 
     const qtd = Number(movForm.quantidade);
@@ -126,15 +153,23 @@ export default function Estoque() {
     const novaQuantidade = isEntrada ? item.quantidade + qtd : item.quantidade - qtd;
 
     if (!isEntrada && novaQuantidade < 0) {
-      alert('Quantidade insuficiente em estoque.');
+      if(addAlerta) addAlerta('Quantidade insuficiente em estoque.', 'error');
+      return;
+    }
+
+    const { error } = await supabase.from('estoque').update({ quantidade: novaQuantidade }).eq('id', item.id);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao registrar movimentação.', 'error');
       return;
     }
 
     setEstoque(prev => prev.map(i => i.id === item.id ? { ...i, quantidade: novaQuantidade } : i));
-    addAtividade(`${isEntrada ? 'Entrada' : 'Saída'} de estoque: ${qtd}x ${item.nome} (${movForm.motivo})`);
+    if(addAtividade) addAtividade(`${isEntrada ? 'Entrada' : 'Saída'} de estoque: ${qtd}x ${item.nome} (${movForm.motivo})`);
     
     if (novaQuantidade <= item.estoque_minimo) {
-      addAlerta(`Estoque baixo: ${item.nome} restam apenas ${novaQuantidade} unidades.`, 'warning');
+      if(addAlerta) addAlerta(`Estoque baixo: ${item.nome} restam apenas ${novaQuantidade} unidades.`, 'warning');
+    } else {
+      if(addAlerta) addAlerta('Movimentação registrada com sucesso', 'success');
     }
 
     setIsMovModalOpen(false);

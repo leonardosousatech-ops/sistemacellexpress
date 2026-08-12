@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useData, useAuth } from '../App'
+import { supabase } from '../supabaseClient'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
-  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight
+  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -77,7 +78,7 @@ export default function Laboratorio() {
     fetchIfixit(os.modelo)
   }
 
-  const handleUpdateStatus = (newStatus) => {
+  const handleUpdateStatus = async (newStatus) => {
     if (!selectedOS) return
     const updates = { status: newStatus }
     if (newStatus === 'pronto') {
@@ -87,32 +88,110 @@ export default function Laboratorio() {
       g.setDate(g.getDate() + 90)
       updates.garantia_ate = g.toISOString().split('T')[0]
     }
+    
+    const { error } = await supabase.from('ordens_servico').update(updates).eq('id', selectedOS.id)
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao atualizar status no banco', 'error')
+      return
+    }
+
     const updated = { ...selectedOS, ...updates }
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
-    addAtividade('Status Atualizado', `OS #${selectedOS.id} → ${STATUS_LABELS[newStatus]}`, 'laboratorio')
-    addAlerta(`OS #${selectedOS.id} atualizada para ${STATUS_LABELS[newStatus]}`, 'success')
+    if(addAtividade) addAtividade('Status Atualizado', `OS #${selectedOS.id} → ${STATUS_LABELS[newStatus]}`, 'laboratorio')
+    if(addAlerta) addAlerta(`OS #${selectedOS.id} atualizada para ${STATUS_LABELS[newStatus]}`, 'success')
   }
 
-  const handleAddPeca = () => {
+  const handleAddPeca = async () => {
     if (!pecaSelecionada || !selectedOS) return
     const peca = estoque.find(e => e.id === Number(pecaSelecionada))
-    if (!peca || peca.quantidade < qtdPeca) {
-      addAlerta('Estoque insuficiente!', 'error')
+    const qtd = Number(qtdPeca)
+    if (!peca || peca.quantidade < qtd) {
+      if(addAlerta) addAlerta('Estoque insuficiente!', 'error')
       return
     }
-    const pecasUsadas = [...(selectedOS.pecas_usadas || []), { id_item: peca.id, quantidade: Number(qtdPeca) }]
+    const pecasUsadas = [...(selectedOS.pecas_usadas || []), { id_item: peca.id, quantidade: qtd }]
     const updated = { ...selectedOS, pecas_usadas: pecasUsadas }
+
+    // Update OS
+    const { error: osError } = await supabase.from('ordens_servico').update({ pecas_usadas: pecasUsadas }).eq('id', selectedOS.id)
+    if (osError) {
+      if(addAlerta) addAlerta('Erro ao salvar peça na OS', 'error')
+      return
+    }
+
+    // Update Estoque
+    const novaQtd = peca.quantidade - qtd
+    const { error: estError } = await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', peca.id)
+    if (estError) {
+      if(addAlerta) addAlerta('Erro ao dar baixa no estoque', 'error')
+      return
+    }
+
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
-    setEstoque(prev => prev.map(item => item.id === peca.id ? { ...item, quantidade: item.quantidade - Number(qtdPeca) } : item))
+    setEstoque(prev => prev.map(item => item.id === peca.id ? { ...item, quantidade: novaQtd } : item))
     setSelectedOS(updated)
-    addAtividade('Peça Adicionada', `${qtdPeca}x ${peca.nome} na OS #${selectedOS.id}`, 'laboratorio')
-    addAlerta(`${peca.nome} adicionada à OS`, 'success')
+    if(addAtividade) addAtividade('Peça Adicionada', `${qtd}x ${peca.nome} na OS #${selectedOS.id}`, 'laboratorio')
+    if(addAlerta) addAlerta(`${peca.nome} adicionada à OS e baixada do estoque`, 'success')
     setPecaSelecionada('')
     setQtdPeca(1)
   }
 
   const getPecaNome = (id_item) => estoque.find(e => e.id === id_item)?.nome || 'Peça removida'
+
+  const handlePrint = () => {
+    if (!selectedOS) return;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Recibo OS #${selectedOS.id}</title>
+          <style>
+            body { font-family: monospace; padding: 20px; max-width: 400px; margin: 0 auto; }
+            .header { text-align: center; border-bottom: 1px dashed #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .content { margin-bottom: 20px; }
+            .content p { margin: 5px 0; }
+            .footer { border-top: 1px dashed #000; padding-top: 10px; text-align: justify; font-size: 11px; margin-top: 30px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2>CELL EXPRESS</h2>
+            <p>Ordem de Servico / Termo de Garantia</p>
+          </div>
+          <div class="content">
+            <p><strong>OS:</strong> #${selectedOS.id}</p>
+            <p><strong>Cliente:</strong> ${getClientName(selectedOS.id_cliente)}</p>
+            <p><strong>Aparelho:</strong> ${selectedOS.modelo}</p>
+            <p><strong>Problema:</strong> ${selectedOS.problema}</p>
+            <br/>
+            <p><strong>Data da Conclusao:</strong> ${selectedOS.data_conclusao ? new Date(selectedOS.data_conclusao).toLocaleDateString('pt-BR') : '-'}</p>
+            <p><strong>Garantia Valida Ate:</strong> ${selectedOS.garantia_ate ? new Date(selectedOS.garantia_ate).toLocaleDateString('pt-BR') : 'N/A'}</p>
+            <br/>
+            ${selectedOS.valor ? `<p style="font-size: 16px;"><strong>Valor Total: R$ ${selectedOS.valor.toFixed(2)}</strong></p>` : ''}
+          </div>
+          <div class="footer">
+            <p><strong>TERMO DE GARANTIA (90 DIAS)</strong></p>
+            <p>A garantia cobre estritamente as pecas substituidas e a mao de obra aplicada no reparo supracitado.</p>
+            <p>Esta garantia sera IMEDIATAMENTE ANULADA caso o aparelho apresente:</p>
+            <p>- Sinais de queda, quebra, amassados ou mau uso.</p>
+            <p>- Contato com liquidos, umidade ou oxidacao.</p>
+            <p>- Rompimento dos selos de garantia ou tentativa de conserto por terceiros.</p>
+            <br/>
+            <p style="text-align: center;">Assinatura do Cliente:</p>
+            <br/><br/>
+            <p style="border-top: 1px solid #000; margin: 0 20px;"></p>
+            <br/>
+            <p style="text-align: center;">Obrigado pela preferencia!</p>
+          </div>
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }
 
   const tabs = [
     { key: 'todos', label: 'Todos' },
@@ -202,7 +281,14 @@ export default function Laboratorio() {
           <div className="modal" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>OS #{selectedOS.id} — {selectedOS.modelo}</h3>
-              <button className="btn-icon" onClick={() => setSelectedOS(null)}><X size={18} /></button>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {(selectedOS.status === 'pronto' || selectedOS.status === 'entregue') && (
+                  <button className="btn btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={handlePrint}>
+                    <Printer size={14} /> Imprimir Recibo
+                  </button>
+                )}
+                <button className="btn-icon" onClick={() => setSelectedOS(null)}><X size={18} /></button>
+              </div>
             </div>
             <div className="modal-body">
               {/* Info Grid */}
