@@ -174,9 +174,10 @@ export default function Laboratorio() {
             <p><strong>TERMO DE GARANTIA (90 DIAS)</strong></p>
             <p>A garantia cobre estritamente as pecas substituidas e a mao de obra aplicada no reparo supracitado.</p>
             <p>Esta garantia sera IMEDIATAMENTE ANULADA caso o aparelho apresente:</p>
-            <p>- Sinais de queda, quebra, amassados ou mau uso.</p>
+            <p>- Sinais de queda, trincos, amassados ou QUALQUER TIPO DE MAU USO.</p>
             <p>- Contato com liquidos, umidade ou oxidacao.</p>
             <p>- Rompimento dos selos de garantia ou tentativa de conserto por terceiros.</p>
+            <p>A garantia NÃO COBRE defeitos decorrentes de mau uso por parte do usuario.</p>
             <br/>
             <p style="text-align: center;">Assinatura do Cliente:</p>
             <br/><br/>
