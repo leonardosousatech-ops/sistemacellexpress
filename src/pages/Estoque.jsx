@@ -246,7 +246,9 @@ export default function Estoque() {
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border, #2a2a2a)' }}>
-              <th style={{ padding: '15px' }}>Nome</th>
+              <th style={{ padding: '15px' }}>Produto</th>
+              <th style={{ padding: '15px' }}>Modelo</th>
+              <th style={{ padding: '15px' }}>Marca</th>
               <th style={{ padding: '15px' }}>Categoria</th>
               <th style={{ padding: '15px' }}>Quantidade</th>
               <th style={{ padding: '15px' }}>Preço Custo</th>
@@ -257,6 +259,32 @@ export default function Estoque() {
           </thead>
           <tbody>
             {filteredEstoque.length > 0 ? filteredEstoque.map(item => {
+              let parsedNome = (item.nome || "").trim();
+              let produto = "";
+              let modelo = "";
+              let marca = "";
+
+              const lowerNome = parsedNome.toLowerCase();
+              const marcas = ["genuína", "genuina", "soft oled", "oled", "jk", "incell", "original", "premium", "prime", "hx", "gx"];
+              for (const m of marcas) {
+                if (lowerNome.endsWith(m)) {
+                  marca = parsedNome.substring(parsedNome.length - m.length);
+                  parsedNome = parsedNome.substring(0, parsedNome.length - m.length).trim();
+                  break;
+                }
+              }
+
+              const produtos = ["bateria", "tela", "display", "conector", "câmera", "camera", "vidro", "tampa traseira", "tampa", "carcaça"];
+              const lowerNome2 = parsedNome.toLowerCase();
+              for (const p of produtos) {
+                if (lowerNome2.startsWith(p)) {
+                  produto = parsedNome.substring(0, p.length);
+                  parsedNome = parsedNome.substring(p.length).trim();
+                  break;
+                }
+              }
+              modelo = parsedNome || "-";
+
               const margem = item.preco_custo > 0 
                 ? ((item.preco_venda - item.preco_custo) / item.preco_custo * 100).toFixed(1) 
                 : 100;
@@ -266,9 +294,22 @@ export default function Estoque() {
 
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border, #2a2a2a)' }}>
-                  <td data-label="Nome" style={{ padding: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <td data-label="Produto" style={{ padding: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {isBaixo && <AlertTriangle size={16} color={isCritico ? 'var(--danger, #FF4444)' : 'var(--warning, #FFAA00)'} />}
-                    {item.nome}
+                    <span style={{ fontWeight: '500' }}>{produto}</span>
+                  </td>
+                  <td data-label="Modelo" style={{ padding: '15px', color: 'var(--text-secondary, #A0A0A0)' }}>
+                    {modelo}
+                  </td>
+                  <td data-label="Marca" style={{ padding: '15px' }}>
+                    {marca !== '-' ? (
+                      <span style={{
+                        padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem',
+                        backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#fff'
+                      }}>
+                        {marca}
+                      </span>
+                    ) : '-'}
                   </td>
                   <td data-label="Categoria" style={{ padding: '15px' }}>
                     <span className="status-badge" style={{ 
@@ -300,7 +341,7 @@ export default function Estoque() {
               );
             }) : (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary, #A0A0A0)' }}>
+                <td colSpan="9" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-secondary, #A0A0A0)' }}>
                   Nenhum item encontrado.
                 </td>
               </tr>
