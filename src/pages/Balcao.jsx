@@ -79,7 +79,7 @@ export default function Balcao() {
             endereco: `${data.logradouro},  - ${data.bairro}, ${data.localidade} - ${data.uf}`
           }));
         } else {
-          if(addAlerta) addAlerta({ type: 'warning', message: 'CEP não encontrado' });
+          if(addAlerta) addAlerta('CEP não encontrado', 'warning');
         }
       } catch (error) {
         console.error("Erro ao buscar CEP:", error);
@@ -109,7 +109,7 @@ export default function Balcao() {
   const handleCreateOS = async (e) => {
     e.preventDefault();
     if (!osForm.clienteId || !osForm.modelo || !osForm.problema) {
-      if(addAlerta) addAlerta({ type: 'warning', message: 'Preencha todos os campos obrigatórios' });
+      if(addAlerta) addAlerta('Preencha todos os campos obrigatórios', 'warning');
       return;
     }
 
@@ -130,7 +130,7 @@ export default function Balcao() {
 
     if (error) {
       console.error(error);
-      if(addAlerta) addAlerta({ type: 'error', message: 'Erro ao criar OS no banco.' });
+      if(addAlerta) addAlerta('Erro ao criar OS no banco.', 'error');
       return;
     }
 
@@ -138,7 +138,7 @@ export default function Balcao() {
     
     const clienteNome = clientes?.find(c => c.id === novaOS.id_cliente)?.nome || 'Cliente';
     if(addAtividade) addAtividade('OS Criada', `OS #${data[0].id} - ${osForm.modelo} - ${clienteNome}`, 'balcao');
-    if(addAlerta) addAlerta({ type: 'success', message: 'Ordem de serviço criada com sucesso!' });
+    if(addAlerta) addAlerta('Ordem de serviço criada com sucesso!', 'success');
     
     setIsOsModalOpen(false);
     setOsForm({
@@ -156,13 +156,13 @@ export default function Balcao() {
     const existing = cart.find(item => item.id === product.id);
     if (existing) {
       if (existing.quantidadeCarrinho >= product.quantidade) {
-        if(addAlerta) addAlerta({ type: 'warning', message: 'Quantidade máxima em estoque atingida!' });
+        if(addAlerta) addAlerta('Quantidade máxima em estoque atingida!', 'warning');
         return;
       }
       setCart(cart.map(item => item.id === product.id ? { ...item, quantidadeCarrinho: item.quantidadeCarrinho + 1 } : item));
     } else {
       if (product.quantidade <= 0) {
-        if(addAlerta) addAlerta({ type: 'warning', message: 'Produto sem estoque!' });
+        if(addAlerta) addAlerta('Produto sem estoque!', 'warning');
         return;
       }
       setCart([...cart, { ...product, quantidadeCarrinho: 1 }]);
@@ -199,7 +199,7 @@ export default function Balcao() {
     }
     
     if (addAtividade) addAtividade('Venda Realizada', `Valor Total: R$ ${total.toFixed(2)}`, 'balcao');
-    if (addAlerta) addAlerta({ type: 'success', message: 'Venda finalizada com sucesso!' });
+    if (addAlerta) addAlerta('Venda finalizada com sucesso!', 'success');
     
     setCart([]);
     setProductSearch('');
@@ -216,7 +216,7 @@ export default function Balcao() {
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!clientForm.nome || !clientForm.telefone) {
-      if(addAlerta) addAlerta({ type: 'warning', message: 'Nome e telefone são obrigatórios' });
+      if(addAlerta) addAlerta('Nome e telefone são obrigatórios', 'warning');
       return;
     }
 
@@ -232,13 +232,13 @@ export default function Balcao() {
 
     if (error) {
       console.error(error);
-      if(addAlerta) addAlerta({ type: 'error', message: 'Erro ao criar cliente no banco.' });
+      if(addAlerta) addAlerta('Erro ao criar cliente no banco.', 'error');
       return;
     }
 
     setClientes([...(clientes || []), data[0]]);
     if(addAtividade) addAtividade('Cliente Cadastrado', `Cliente ${novoCliente.nome} cadastrado via balcão`, 'balcao');
-    if(addAlerta) addAlerta({ type: 'success', message: 'Cliente cadastrado com sucesso!' });
+    if(addAlerta) addAlerta('Cliente cadastrado com sucesso!', 'success');
     
     setIsClientModalOpen(false);
     setOsForm({ ...osForm, clienteId: data[0].id });
