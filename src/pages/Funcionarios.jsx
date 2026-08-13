@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../App';
+import { supabase } from '../supabaseClient';
 import {
   Users, UserCheck, Activity, PenTool, Plus, X, Search, Edit2,
   Eye, Save, AlertCircle, Shield, Briefcase, Phone, Mail,
@@ -80,7 +81,7 @@ export default function Funcionarios() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nome || !formData.email || !formData.cargo) {
       if (addAlerta) addAlerta('Preencha os campos obrigatórios.', 'warning');
@@ -88,25 +89,39 @@ export default function Funcionarios() {
     }
 
     if (editingFuncionario) {
+      const { error } = await supabase.from('funcionarios').update(formData).eq('id', editingFuncionario.id);
+      if (error) {
+         if (addAlerta) addAlerta('Erro ao atualizar funcionário no banco.', 'error');
+         return;
+      }
+      
       const updatedFuncionarios = funcionarios.map(f =>
-        f.id === editingFuncionario.id ? { ...f, ...formData, id: f.id } : f
+        f.id === editingFuncionario.id ? { ...f, ...formData } : f
       );
       if (setFuncionarios) setFuncionarios(updatedFuncionarios);
       if (addAtividade) addAtividade('Editou funcionário', `Editou os dados de ${formData.nome}`, 'funcionarios');
       if (addAlerta) addAlerta('Funcionário atualizado com sucesso.', 'success');
     } else {
-      const newFunc = {
-        ...formData,
-        id: Date.now().toString()
-      };
-      if (setFuncionarios) setFuncionarios([...(funcionarios || []), newFunc]);
+      const { data, error } = await supabase.from('funcionarios').insert([formData]).select();
+      if (error || !data) {
+         if (addAlerta) addAlerta('Erro ao cadastrar funcionário no banco.', 'error');
+         return;
+      }
+      
+      if (setFuncionarios) setFuncionarios([...(funcionarios || []), data[0]]);
       if (addAtividade) addAtividade('Adicionou funcionário', `Cadastrou o funcionário ${formData.nome}`, 'funcionarios');
       if (addAlerta) addAlerta('Funcionário cadastrado com sucesso.', 'success');
     }
     handleCloseModal();
   };
 
-  const handleToggleStatus = (id, currentStatus) => {
+  const handleToggleStatus = async (id, currentStatus) => {
+    const { error } = await supabase.from('funcionarios').update({ ativo: !currentStatus }).eq('id', id);
+    if (error) {
+      if (addAlerta) addAlerta('Erro ao alterar status no banco.', 'error');
+      return;
+    }
+    
     const updatedFuncionarios = funcionarios.map(f =>
       f.id === id ? { ...f, ativo: !currentStatus } : f
     );

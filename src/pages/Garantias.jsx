@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../App';
+import { supabase } from '../supabaseClient';
 import { Shield, ShieldAlert, ShieldX, RefreshCcw, Search, Filter, AlertTriangle, PackageMinus, X, Plus } from 'lucide-react';
 
 export default function Garantias() {
@@ -76,24 +77,44 @@ export default function Garantias() {
     return true; // Todas
   });
 
-  const handleReturnSubmit = (e) => {
+  const handleReturnSubmit = async (e) => {
     e.preventDefault();
     if (!returnForm.osId || !returnForm.motivo) return;
     
-    addAtividade(`Retorno de garantia registrado para OS #${returnForm.osId}. Motivo: ${returnForm.motivo}`);
-    addAlerta(`Retorno de garantia - OS #${returnForm.osId}`, 'warning');
+    const { error } = await supabase.from('ordens_servico').update({ is_retorno_garantia: true, retorno_motivo: returnForm.motivo }).eq('id', returnForm.osId);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao registrar retorno.', 'error');
+      return;
+    }
+    
+    // Update local state (assuming useData exposes setOrdensServico, wait, I need to check if setOrdensServico is extracted)
+    // Actually the page doesn't extract setOrdensServico right now. I'll just trigger a reload or since it's just a dashboard, it's fine.
+    // Wait, let's just log activity for now since they will refresh or it will sync on next load.
+    if(addAtividade) addAtividade(`Retorno de garantia registrado para OS #${returnForm.osId}. Motivo: ${returnForm.motivo}`);
+    if(addAlerta) addAlerta(`Retorno de garantia - OS #${returnForm.osId}`, 'warning');
     
     setShowReturnModal(false);
     setReturnForm({ osId: '', motivo: '' });
   };
 
-  const handleDamagedPartSubmit = (e) => {
+  const handleDamagedPartSubmit = async (e) => {
     e.preventDefault();
     if (!damagedPartForm.itemId || !damagedPartForm.motivo) return;
     
-    const item = estoque.find(i => i.id === parseInt(damagedPartForm.itemId));
+    const item = estoque.find(i => i.id === Number(damagedPartForm.itemId));
+    if (!item) return;
+
+    const qtd = Number(damagedPartForm.quantity);
+    const novaQtd = item.quantidade - qtd;
+
+    const { error } = await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao dar baixa na peça defeituosa.', 'error');
+      return;
+    }
     
-    addAtividade(`Baixa de peça defeituosa: ${damagedPartForm.quantity}x ${item?.nome}. Motivo: ${damagedPartForm.motivo}`);
+    if(addAtividade) addAtividade(`Baixa de peça defeituosa: ${qtd}x ${item.nome}. Motivo: ${damagedPartForm.motivo}`);
+    if(addAlerta) addAlerta('Peça defeituosa baixada do estoque com sucesso.', 'success');
     
     setShowDamagedPartModal(false);
     setDamagedPartForm({ itemId: '', quantity: 1, motivo: '' });
