@@ -34,6 +34,7 @@ export default function Laboratorio() {
   const [qtdPeca, setQtdPeca] = useState(1)
   const [ifixitGuides, setIfixitGuides] = useState([])
   const [loadingIfixit, setLoadingIfixit] = useState(false)
+  const [esquemaUrlInput, setEsquemaUrlInput] = useState('')
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -75,6 +76,7 @@ export default function Laboratorio() {
 
   const handleOpenOS = (os) => {
     setSelectedOS(os)
+    setEsquemaUrlInput(os.url_esquema || '')
     fetchIfixit(os.modelo)
   }
 
@@ -135,6 +137,19 @@ export default function Laboratorio() {
     if(addAlerta) addAlerta(`${peca.nome} adicionada à OS e baixada do estoque`, 'success')
     setPecaSelecionada('')
     setQtdPeca(1)
+  }
+
+  const handleSaveEsquemaUrl = async () => {
+    if (!selectedOS) return
+    const { error } = await supabase.from('ordens_servico').update({ url_esquema: esquemaUrlInput }).eq('id', selectedOS.id)
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao salvar URL do esquema. Você adicionou a coluna url_esquema no banco?', 'error')
+      return
+    }
+    const updated = { ...selectedOS, url_esquema: esquemaUrlInput }
+    setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
+    setSelectedOS(updated)
+    if(addAlerta) addAlerta('Esquema elétrico salvo com sucesso!', 'success')
   }
 
   const getPecaNome = (id_item) => estoque.find(e => e.id === id_item)?.nome || 'Peça removida'
@@ -403,6 +418,43 @@ export default function Laboratorio() {
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nenhum guia encontrado para "{selectedOS.modelo}".</p>
                 )}
               </div>
+              
+              {/* Esquemas Elétricos e Placa */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '20px' }}>
+                <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Wrench size={18} /> Esquemas Elétricos & Boardview
+                </h4>
+                
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                  <a href={`https://www.google.com/search?q=${encodeURIComponent(selectedOS.modelo + ' schematic pdf boardview')}`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, textAlign: 'center' }}>
+                    <Search size={14} style={{ marginRight: '6px' }} /> Buscar no Google
+                  </a>
+                  <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(selectedOS.modelo + ' motherboard repair boardview')}`} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, textAlign: 'center', backgroundColor: 'rgba(255, 0, 0, 0.1)', color: '#ff4444', borderColor: '#ff4444' }}>
+                    <Play size={14} style={{ marginRight: '6px' }} /> Buscar no YouTube
+                  </a>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Link do Esquema Elétrico (PDF / Drive / Borneo Web)</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input 
+                      type="url" 
+                      className="form-input" 
+                      placeholder="Cole aqui o link do esquema elétrico que você encontrou..." 
+                      value={esquemaUrlInput} 
+                      onChange={e => setEsquemaUrlInput(e.target.value)} 
+                      style={{ flex: 1 }} 
+                    />
+                    <button className="btn btn-primary" onClick={handleSaveEsquemaUrl}>Salvar Link</button>
+                  </div>
+                  {selectedOS.url_esquema && (
+                    <a href={selectedOS.url_esquema} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '8px', fontSize: '0.85rem', color: 'var(--info)' }}>
+                      <ExternalLink size={14} /> Abrir esquema elétrico salvo
+                    </a>
+                  )}
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
