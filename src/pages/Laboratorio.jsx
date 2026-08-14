@@ -3,7 +3,7 @@ import { useData, useAuth } from '../App'
 import { supabase } from '../supabaseClient'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
-  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame
+  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2
 } from 'lucide-react'
 
 const STATUS_LABELS = {
