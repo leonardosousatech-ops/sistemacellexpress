@@ -25,7 +25,7 @@ const NEXT_STATUS = {
 const PRIORITY_ORDER = { urgente: 1, alta: 2, normal: 3, baixa: 4 }
 
 export default function Laboratorio() {
-  const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta } = useData()
+  const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta, setFinanceiro } = useData()
   const { user } = useAuth()
 
   const [filterTab, setFilterTab] = useState('todos')
@@ -35,6 +35,7 @@ export default function Laboratorio() {
   const [ifixitGuides, setIfixitGuides] = useState([])
   const [loadingIfixit, setLoadingIfixit] = useState(false)
   const [esquemaUrlInput, setEsquemaUrlInput] = useState('')
+  const [valorInput, setValorInput] = useState('')
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -103,6 +104,7 @@ export default function Laboratorio() {
   const handleOpenOS = (os) => {
     setSelectedOS(os)
     setEsquemaUrlInput(os.url_esquema || '')
+    setValorInput(os.valor || '')
     fetchIfixit(os.modelo)
   }
 
@@ -176,6 +178,63 @@ export default function Laboratorio() {
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
     if(addAlerta) addAlerta('Esquema elétrico salvo com sucesso!', 'success')
+  }
+
+  
+  const handleSaveValor = async () => {
+    if (!selectedOS) return
+    const novoValor = parseFloat(valorInput)
+    if (isNaN(novoValor)) {
+      if(addAlerta) addAlerta('Valor inválido', 'warning')
+      return
+    }
+    const { error } = await supabase.from('ordens_servico').update({ valor: novoValor }).eq('id', selectedOS.id)
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao salvar valor', 'error')
+      return
+    }
+    const updated = { ...selectedOS, valor: novoValor }
+    setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
+    setSelectedOS(updated)
+    if(addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
+  }
+
+  const handleDeliverAndPay = async () => {
+    if (!selectedOS.valor) {
+      if(addAlerta) addAlerta('Defina e salve o valor da OS antes de pagar e entregar!', 'warning')
+      return
+    }
+    
+    // Inserir no financeiro
+    const { data: finData, error: finError } = await supabase.from('financeiro').insert([{
+      tipo: 'entrada',
+      categoria: 'servico',
+      valor: selectedOS.valor,
+      descricao: `Pagamento OS #${selectedOS.id} - ${selectedOS.modelo}`
+    }]).select()
+
+    if (finError) {
+      if(addAlerta) addAlerta('Erro ao registrar no financeiro', 'error')
+      return
+    }
+
+    if (finData && setFinanceiro) {
+      setFinanceiro(prev => [finData[0], ...(prev || [])])
+    }
+
+    // Atualizar status para entregue e data
+    const now = new Date()
+    const { error: osError } = await supabase.from('ordens_servico').update({ status: 'entregue', data_conclusao: now.toISOString() }).eq('id', selectedOS.id)
+    if (osError) {
+      if(addAlerta) addAlerta('Erro ao atualizar OS', 'error')
+      return
+    }
+
+    const updated = { ...selectedOS, status: 'entregue', data_conclusao: now.toISOString() }
+    setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
+    setSelectedOS(updated)
+    if(addAtividade) addAtividade('OS Entregue e Paga', `OS #${selectedOS.id} entregue (R$ ${selectedOS.valor})`, 'laboratorio')
+    if(addAlerta) addAlerta('OS entregue e pagamento registrado com sucesso!', 'success')
   }
 
   const getPecaNome = (id_item) => estoque.find(e => e.id === id_item)?.nome || 'Peça removida'
@@ -366,12 +425,24 @@ export default function Laboratorio() {
                     <label>Data de Entrada</label>
                     <div>{new Date(selectedOS.data_entrada).toLocaleString('pt-BR')}</div>
                   </div>
-                  {selectedOS.valor && (
-                    <div className="form-group">
-                      <label>Valor</label>
-                      <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
+                  <div className="form-group">
+                      <label>Valor da OS</label>
+                      {selectedOS.status !== 'entregue' ? (
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <input 
+                            type="number" 
+                            className="form-input" 
+                            placeholder="R$ 0.00" 
+                            value={valorInput} 
+                            onChange={e => setValorInput(e.target.value)} 
+                            style={{ flex: 1, padding: '8px' }} 
+                          />
+                          <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar</button>
+                        </div>
+                      ) : (
+                         <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
+                      )}
                     </div>
-                  )}
                 </div>
               </div>
 
@@ -405,6 +476,11 @@ export default function Laboratorio() {
                     {selectedOS.status !== 'aguardando-peca' && (
                       <button className="btn btn-danger" onClick={() => handleUpdateStatus('aguardando-peca')}>
                         <Pause size={14} /> Aguardando Peça
+                      </button>
+                    )}
+                    {selectedOS.status === 'pronto' && (
+                      <button className="btn btn-primary" onClick={handleDeliverAndPay} style={{ backgroundColor: 'var(--success)', color: '#000', fontWeight: 'bold' }}>
+                        <CheckCircle size={14} /> Pagar e Entregar
                       </button>
                     )}
                   </div>
