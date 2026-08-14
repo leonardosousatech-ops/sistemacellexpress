@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useData, useAuth } from '../App';
 import { supabase } from '../supabaseClient';
 import { 
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function Balcao() {
+  const navigate = useNavigate();
   const { 
     clientes, 
     setClientes, 
@@ -34,6 +36,8 @@ export default function Balcao() {
 
   // Modals state
   const [isOsModalOpen, setIsOsModalOpen] = useState(false);
+  const [isClientListModalOpen, setIsClientListModalOpen] = useState(false);
+  const [viewOsData, setViewOsData] = useState(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
   // Filters state
@@ -63,6 +67,34 @@ export default function Balcao() {
     cep: '',
     endereco: ''
   });
+
+  
+  const handleDeleteClient = async (id) => {
+    if (!window.confirm('Tem certeza que deseja apagar este cliente? Esta ação não pode ser desfeita.')) return;
+    const { error } = await supabase.from('clientes').delete().eq('id', id);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao apagar cliente no banco de dados', 'error');
+      return;
+    }
+    setClientes(prev => prev.filter(c => c.id !== id));
+    if(addAlerta) addAlerta('Cliente apagado com sucesso', 'success');
+  };
+
+  const handleViewOS = (os) => {
+    setViewOsData(os);
+  };
+
+  const handleDeleteOS = async (id) => {
+    if (!window.confirm('Tem certeza que deseja APAGAR esta OS? Isso não pode ser desfeito!')) return;
+    const { error } = await supabase.from('ordens_servico').delete().eq('id', id);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao excluir OS no banco', 'error');
+      return;
+    }
+    setOrdensServico(prev => prev.filter(os => os.id !== id));
+    setViewOsData(null);
+    if(addAlerta) addAlerta('OS apagada com sucesso.', 'success');
+  };
 
   const handleCepChange = async (e) => {
     const cep = e.target.value.replace(/\D/g, '');
@@ -320,7 +352,7 @@ export default function Balcao() {
 
       {/* KPI Cards */}
       <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Ativas</h3>
             <Wrench size={20} color="var(--info-color, #3B82F6)" />
@@ -328,7 +360,7 @@ export default function Balcao() {
           <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osAtivas.length}</p>
         </div>
         
-        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Prontas</h3>
             <CheckCircle size={20} color="var(--success-color, #25D366)" />
@@ -336,7 +368,7 @@ export default function Balcao() {
           <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osProntas.length}</p>
         </div>
 
-        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+        <div className="kpi-card card" onClick={() => setIsClientListModalOpen(true)} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Clientes Cadastrados</h3>
             <Users size={20} color="var(--accent-color, #FFD700)" />
@@ -344,7 +376,7 @@ export default function Balcao() {
           <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{clientes?.length || 0}</p>
         </div>
 
-        <div className="kpi-card card" style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+        <div className="kpi-card card" onClick={() => navigate('/financeiro')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
             <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Vendas do Dia</h3>
             <ShoppingCart size={20} color="var(--success-color, #25D366)" />
@@ -434,7 +466,7 @@ export default function Balcao() {
                       </td>
                       <td data-label="Data Entrada" style={{ padding: '10px' }}>{new Date(os.dataEntrada).toLocaleDateString('pt-BR')}</td>
                       <td data-label="Ações" style={{ padding: '10px' }}>
-                        <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }}>Detalhes</button>
+                        <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => handleViewOS(os)}>Detalhes</button>
                       </td>
                     </tr>
                   ))
@@ -743,6 +775,78 @@ export default function Balcao() {
           </div>
         </div>
       )}
+
+      {/* Client List Modal */}
+      {isClientListModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Clientes Cadastrados</h2>
+              <button onClick={() => setIsClientListModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)' }}>
+                  <th style={{ padding: '10px' }}>Nome</th>
+                  <th style={{ padding: '10px' }}>Telefone</th>
+                  <th style={{ padding: '10px' }}>E-mail</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clientes?.map(c => (
+                  <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)' }}>
+                    <td style={{ padding: '10px' }}>{c.nome}</td>
+                    <td style={{ padding: '10px' }}>{c.telefone}</td>
+                    <td style={{ padding: '10px' }}>{c.email || '-'}</td>
+                    <td style={{ padding: '10px', textAlign: 'right' }}>
+                      <button className="btn btn-danger" style={{ padding: '5px 10px', backgroundColor: 'var(--danger-color, #FF4444)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '5px' }} onClick={() => handleDeleteClient(c.id)}>
+                        <Trash2 size={14} /> Apagar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {(!clientes || clientes.length === 0) && (
+                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: '20px' }}>Nenhum cliente cadastrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* View OS Modal */}
+      {viewOsData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Detalhes da OS #{viewOsData.id}</h2>
+              <button onClick={() => setViewOsData(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+              <p><strong>Cliente:</strong> {clientes?.find(c => c.id === viewOsData.clienteId || c.id === viewOsData.id_cliente)?.nome || 'Desconhecido'}</p>
+              <p><strong>Aparelho:</strong> {viewOsData.modelo || viewOsData.tipo_aparelho}</p>
+              <p><strong>Problema:</strong> {viewOsData.problema}</p>
+              <p><strong>Status:</strong> {viewOsData.status}</p>
+              <p><strong>Prioridade:</strong> {viewOsData.prioridade}</p>
+              <p><strong>Data de Entrada:</strong> {new Date(viewOsData.dataEntrada || viewOsData.data_entrada).toLocaleString('pt-BR')}</p>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
+              <button className="btn btn-danger" style={{ padding: '10px 20px', backgroundColor: 'var(--danger-color, #FF4444)', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => handleDeleteOS(viewOsData.id)}>
+                <Trash2 size={16} style={{ marginRight: '5px' }} /> Apagar OS
+              </button>
+              <button className="btn btn-secondary" style={{ padding: '10px 20px', backgroundColor: 'transparent', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setViewOsData(null)}>
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
