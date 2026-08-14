@@ -3,7 +3,7 @@ import { useData, useAuth } from '../App'
 import { supabase } from '../supabaseClient'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
-  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer
+  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -72,6 +72,32 @@ export default function Laboratorio() {
     } finally {
       setLoadingIfixit(false)
     }
+  }
+
+  const modelNeedsHeat = useMemo(() => {
+    if (!selectedOS || !selectedOS.modelo) return false
+    return estoque.some(e => e.nome.toLowerCase().includes(selectedOS.modelo.toLowerCase()) && e.precisa_aquecer)
+  }, [selectedOS, estoque])
+
+  const handleSetSeparadora = async (precisa) => {
+    if (!selectedOS || !selectedOS.modelo) return
+    const { error } = await supabase.from('estoque')
+      .update({ precisa_aquecer: precisa })
+      .ilike('nome', `%${selectedOS.modelo}%`)
+    
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao atualizar banco de dados', 'error')
+      return
+    }
+    
+    const updatedEstoque = estoque.map(e => {
+      if (e.nome.toLowerCase().includes(selectedOS.modelo.toLowerCase())) {
+        return { ...e, precisa_aquecer: precisa }
+      }
+      return e
+    })
+    setEstoque(updatedEstoque)
+    if(addAlerta) addAlerta(`Configurado! ${selectedOS.modelo} usa separadora.`, 'success')
   }
 
   const handleOpenOS = (os) => {
@@ -348,6 +374,23 @@ export default function Laboratorio() {
                   )}
                 </div>
               </div>
+
+                {/* Separadora Info */}
+                <div style={{ marginBottom: '24px', padding: '15px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Flame size={18} color="var(--danger, #FF4444)" /> Aparelho usa Separadora?
+                  </h4>
+                  {modelNeedsHeat ? (
+                    <p style={{ color: 'var(--danger)', fontWeight: 'bold' }}>Sim, este aparelho desmonta com calor!</p>
+                  ) : (
+                    <div>
+                      <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>Se este aparelho precisa de separadora, confirme abaixo para salvar no sistema:</p>
+                      <button className="btn btn-secondary" onClick={() => handleSetSeparadora(true)} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>
+                        <Flame size={14} style={{ marginRight: '6px' }} /> Sim, precisa de separadora
+                      </button>
+                    </div>
+                  )}
+                </div>
 
               {/* Status Actions */}
               {selectedOS.status !== 'pronto' && selectedOS.status !== 'entregue' && (
