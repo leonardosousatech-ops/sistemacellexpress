@@ -199,6 +199,22 @@ export default function Laboratorio() {
     if(addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
   }
 
+  
+  const handleDeleteOS = async () => {
+    if (!window.confirm('Tem certeza que deseja APAGAR esta OS? Isso não pode ser desfeito!')) return;
+    
+    const { error } = await supabase.from('ordens_servico').delete().eq('id', selectedOS.id);
+    if (error) {
+      if(addAlerta) addAlerta('Erro ao excluir OS.', 'error');
+      return;
+    }
+    
+    setOrdensServico(prev => prev.filter(os => os.id !== selectedOS.id));
+    setSelectedOS(null);
+    if(addAtividade) addAtividade('OS Excluída', `OS #${selectedOS.id} excluída permanentemente`, 'laboratorio');
+    if(addAlerta) addAlerta('OS apagada com sucesso.', 'success');
+  }
+
   const handleDeliverAndPay = async () => {
     if (!selectedOS.valor) {
       if(addAlerta) addAlerta('Defina e salve o valor da OS antes de pagar e entregar!', 'warning')
@@ -388,6 +404,9 @@ export default function Laboratorio() {
                     <Printer size={14} /> Imprimir Recibo
                   </button>
                 )}
+                <button className="btn btn-danger" style={{ padding: '5px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: 'var(--danger)', color: '#fff', border: 'none' }} onClick={handleDeleteOS}>
+                  <Trash2 size={14} /> Apagar OS
+                </button>
                 <button className="btn-icon" onClick={() => setSelectedOS(null)}><X size={18} /></button>
               </div>
             </div>
