@@ -3,7 +3,7 @@ import { useData } from '../App';
 import { supabase } from '../supabaseClient';
 import { 
   Package, Search, Plus, Edit2, AlertTriangle, 
-  ArrowUpRight, ArrowDownRight, Archive, Box, Filter
+  ArrowUpRight, ArrowDownRight, Archive, Box, Filter, Flame
 } from 'lucide-react';
 
 // Format currency
@@ -34,7 +34,8 @@ export default function Estoque() {
     quantidade: 0,
     estoque_minimo: 5,
     preco_custo: 0,
-    preco_venda: 0
+    preco_venda: 0,
+    precisa_aquecer: false
   });
   
   const [movForm, setMovForm] = useState({
@@ -89,7 +90,8 @@ export default function Estoque() {
         quantidade: 0,
         estoque_minimo: 5,
         preco_custo: 0,
-        preco_venda: 0
+        preco_venda: 0,
+        precisa_aquecer: false
       });
     }
     setIsItemModalOpen(true);
@@ -105,7 +107,8 @@ export default function Estoque() {
         quantidade: Number(itemForm.quantidade),
         estoque_minimo: Number(itemForm.estoque_minimo),
         preco_custo: Number(itemForm.preco_custo),
-        preco_venda: Number(itemForm.preco_venda)
+        preco_venda: Number(itemForm.preco_venda),
+        precisa_aquecer: !!itemForm.precisa_aquecer
       };
       
       const { error } = await supabase.from('estoque').update(updates).eq('id', editingItem.id);
@@ -126,7 +129,8 @@ export default function Estoque() {
         quantidade: Number(itemForm.quantidade),
         estoque_minimo: Number(itemForm.estoque_minimo),
         preco_custo: Number(itemForm.preco_custo),
-        preco_venda: Number(itemForm.preco_venda)
+        preco_venda: Number(itemForm.preco_venda),
+        precisa_aquecer: !!itemForm.precisa_aquecer
       };
       
       const { data, error } = await supabase.from('estoque').insert([newItem]).select();
@@ -294,9 +298,16 @@ export default function Estoque() {
 
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border, #2a2a2a)' }}>
-                  <td data-label="Produto" style={{ padding: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {isBaixo && <AlertTriangle size={16} color={isCritico ? 'var(--danger, #FF4444)' : 'var(--warning, #FFAA00)'} />}
-                    <span style={{ fontWeight: '500' }}>{produto}</span>
+                  <td data-label="Produto" style={{ padding: '15px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {isBaixo && <AlertTriangle size={16} color={isCritico ? 'var(--danger, #FF4444)' : 'var(--warning, #FFAA00)'} />}
+                      <span style={{ fontWeight: '500' }}>{produto}</span>
+                      {item.precisa_aquecer && (
+                        <span title="Precisa de separadora (esquentar)" style={{ color: 'var(--danger, #FF4444)' }}>
+                          <Flame size={16} />
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td data-label="Modelo" style={{ padding: '15px', color: 'var(--text-secondary, #A0A0A0)' }}>
                     {modelo}
@@ -391,6 +402,14 @@ export default function Estoque() {
                   <label>Preço de Venda (R$)</label>
                   <input required type="number" step="0.01" min="0" value={itemForm.preco_venda} onChange={e => setItemForm({...itemForm, preco_venda: e.target.value})} style={{ width: '100%', padding: '8px' }} />
                 </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <input type="checkbox" id="precisa_aquecer" checked={itemForm.precisa_aquecer} onChange={e => setItemForm({...itemForm, precisa_aquecer: e.target.checked})} style={{ width: '18px', height: '18px' }} />
+                <label htmlFor="precisa_aquecer" style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', margin: 0 }}>
+                  <Flame size={18} color="var(--danger, #FF4444)" />
+                  Aparelho precisa esquentar? (Usa Separadora)
+                </label>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
