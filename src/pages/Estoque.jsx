@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../App';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient'
+import EstoqueBot from '../components/EstoqueBot';
 import { 
   Package, Search, Plus, Edit2, AlertTriangle, 
   ArrowUpRight, ArrowDownRight, Archive, Box, Filter, Flame
