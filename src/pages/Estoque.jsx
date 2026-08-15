@@ -466,9 +466,10 @@ export default function Estoque() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
+        <EstoqueBot addAlerta={addAlerta} />
+      </div>
+    );
+  }
 
 // Inline styles for modals (fallback if generic classes aren't enough)
 const modalOverlayStyle = {
