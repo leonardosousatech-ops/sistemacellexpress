@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData, useAuth } from '../App';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient'
+import DamageMap from '../components/DamageMap';
 import { 
   Users, 
   Wrench, 
@@ -36,6 +37,7 @@ export default function Balcao() {
 
   // Modals state
   const [isOsModalOpen, setIsOsModalOpen] = useState(false);
+  const [damageMarkers, setDamageMarkers] = useState([]);
   const [isClientListModalOpen, setIsClientListModalOpen] = useState(false);
   const [viewOsData, setViewOsData] = useState(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -152,7 +154,7 @@ export default function Balcao() {
       id_cliente: parseInt(osForm.clienteId),
       tipo_aparelho: osForm.tipoAparelho,
       modelo: osForm.modelo,
-      condicao: osForm.condicao,
+      condicao: JSON.stringify(damageMarkers),
       problema: finalProblema,
       prioridade: finalPrioridade,
       status: 'na-fila'
@@ -650,28 +652,21 @@ export default function Balcao() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '15px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Problema Relatado *</label>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Observações *</label>
                 <textarea 
                   className="form-input" 
                   value={osForm.problema} 
                   onChange={(e) => setOsForm({...osForm, problema: e.target.value})}
                   required
                   rows={3}
-                  placeholder="Descreva o problema relatado pelo cliente"
+                  placeholder="Observações sobre o aparelho, defeito relatado, etc"
                   style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', resize: 'vertical' }}
                 />
               </div>
 
               <div className="form-group" style={{ marginBottom: '20px' }}>
-                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Condição do Aparelho</label>
-                <textarea 
-                  className="form-input" 
-                  value={osForm.condicao} 
-                  onChange={(e) => setOsForm({...osForm, condicao: e.target.value})}
-                  rows={2}
-                  placeholder="Marcas de uso, arranhões, etc"
-                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', resize: 'vertical' }}
-                />
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Condição do Aparelho (Mapa de Avarias)</label>
+                <DamageMap markers={damageMarkers} onChange={setDamageMarkers} />
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
@@ -830,9 +825,17 @@ export default function Balcao() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
               <p><strong>Cliente:</strong> {clientes?.find(c => c.id === viewOsData.clienteId || c.id === viewOsData.id_cliente)?.nome || 'Desconhecido'}</p>
               <p><strong>Aparelho:</strong> {viewOsData.modelo || viewOsData.tipo_aparelho}</p>
-              <p><strong>Problema:</strong> {viewOsData.problema}</p>
+              <p><strong>Observações:</strong> {viewOsData.problema}</p>
               <p><strong>Status:</strong> {viewOsData.status}</p>
               <p><strong>Prioridade:</strong> {viewOsData.prioridade}</p>
+              <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                <p style={{ marginBottom: '5px' }}><strong>Condição / Avarias:</strong></p>
+                <DamageMap 
+                  readOnly={true} 
+                  markers={viewOsData?.condicao && viewOsData.condicao.startsWith('[') ? JSON.parse(viewOsData.condicao) : []} 
+                />
+              </div>
+
               <p><strong>Data de Entrada:</strong> {new Date(viewOsData.dataEntrada || viewOsData.data_entrada).toLocaleString('pt-BR')}</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>

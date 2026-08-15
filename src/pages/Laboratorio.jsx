@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useData, useAuth } from '../App'
 import { supabase } from '../supabaseClient'
+import DamageMap from '../components/DamageMap'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
   Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2
@@ -423,11 +424,15 @@ export default function Laboratorio() {
                     <div>{selectedOS.tipo_aparelho} — {selectedOS.modelo}</div>
                   </div>
                   <div className="form-group">
-                    <label>Condição</label>
-                    <div style={{ color: 'var(--text-secondary)' }}>{selectedOS.condicao}</div>
+                    <label>Condição / Avarias</label>
+                    {selectedOS.condicao && selectedOS.condicao.startsWith('[') ? (
+                       <DamageMap readOnly={true} markers={JSON.parse(selectedOS.condicao)} />
+                    ) : (
+                       <div style={{ color: 'var(--text-secondary)' }}>{selectedOS.condicao || 'Nenhuma condição informada'}</div>
+                    )}
                   </div>
                   <div className="form-group">
-                    <label>Problema Relatado</label>
+                    <label>Observações</label>
                     <div>{selectedOS.problema}</div>
                   </div>
                 </div>
