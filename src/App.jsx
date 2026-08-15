@@ -120,7 +120,7 @@ function App() {
 
   if (!user) {
     return (
-      <AuthContext.Provider value={{ user, login, logout }}>
+      <AuthContext.Provider value={{ user, setUser, login, logout }}>
         <Login />
       </AuthContext.Provider>
     )
@@ -130,7 +130,7 @@ function App() {
   const defaultRoute = `/${user.papeis[0]}`
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, setUser, login, logout }}>
       <DataContext.Provider value={dataValue}>
         <BrowserRouter>
           <Layout>

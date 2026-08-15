@@ -16,7 +16,7 @@ export default function Funcionarios() {
   const [selectedFuncionario, setSelectedFuncionario] = useState(null);
 
   const [formData, setFormData] = useState({
-    nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true, permissoes: []
+    nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true, papeis: []
   });
 
   const permissoesOptions = ['balcao', 'laboratorio', 'estoque', 'financeiro', 'garantias', 'funcionarios'];
@@ -47,12 +47,12 @@ export default function Funcionarios() {
         cargo: func.cargo || '',
         telefone: func.telefone || '',
         ativo: func.ativo !== false,
-        permissoes: func.permissoes || []
+        papeis: func.papeis || []
       });
     } else {
       setEditingFuncionario(null);
       setFormData({
-        nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true, permissoes: []
+        nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true, papeis: []
       });
     }
     setIsModalOpen(true);
@@ -65,8 +65,8 @@ export default function Funcionarios() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    if (name === 'permissoes') {
-      let newPermissoes = [...formData.permissoes];
+    if (name === 'papeis') {
+      let newPermissoes = [...formData.papeis];
       if (checked) {
         newPermissoes.push(value);
       } else {
@@ -389,10 +389,10 @@ export default function Funcionarios() {
                       <div key={p} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <input 
                           type="checkbox" 
-                          name="permissoes" 
+                          name="papeis" 
                           value={p} 
                           id={`perm_${p}`}
-                          checked={formData.permissoes.includes(p)} 
+                          checked={formData.papeis.includes(p)} 
                           onChange={handleChange}
                           style={{ width: '16px', height: '16px', accentColor: '#FFD700' }}
                         />
