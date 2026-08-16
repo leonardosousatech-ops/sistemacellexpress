@@ -10,18 +10,16 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    setTimeout(() => {
-      const user = login(email, senha)
-      if (!user) {
-        setError('Email ou senha incorretos')
-      }
+    const success = await login(email, senha)
+    if (!success) {
+      setError('Email ou senha incorretos')
       setLoading(false)
-    }, 600)
+    }
   }
 
   return (

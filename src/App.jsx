@@ -36,51 +36,89 @@ function App() {
   const [alertas, setAlertas] = useState([])
   const [loading, setLoading] = useState(true)
 
-  // Load all data from Supabase on mount
+  // Load session on mount
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [
-          { data: clientesData },
-          { data: osData },
-          { data: estoqueData },
-          { data: financeiroData },
-          { data: funcData },
-          { data: ativData }
-        ] = await Promise.all([
-          supabase.from('clientes').select('*').order('id', { ascending: false }),
-          supabase.from('ordens_servico').select('*').order('id', { ascending: false }),
-          supabase.from('estoque').select('*').order('nome', { ascending: true }),
-          supabase.from('financeiro').select('*').order('data', { ascending: false }),
-          supabase.from('funcionarios').select('*').order('nome', { ascending: true }),
-          supabase.from('atividades').select('*').order('data_hora', { ascending: false })
-        ])
-
-        setClientes(clientesData || [])
-        setOrdensServico(osData || [])
-        setEstoque(estoqueData || [])
-        setFinanceiro(financeiroData || [])
-        setFuncionarios(funcData || [])
-        setAtividades(ativData || [])
-      } catch (error) {
-        console.error('Erro ao carregar dados:', error)
-      } finally {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        fetchUserAndData(session.user.id)
+      } else {
         setLoading(false)
       }
-    }
-    loadData()
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        fetchUserAndData(session.user.id)
+      } else {
+        setUser(null)
+        setLoading(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const login = (email, senha) => {
-    const found = funcionarios.find(u => u.email === email && u.senha === senha && u.ativo)
-    if (found) {
-      setUser(found)
-      return found
+  const fetchUserAndData = async (authId) => {
+    try {
+      const { data: funcData } = await supabase.from('funcionarios').select('*').eq('auth_id', authId).single()
+      if (funcData && funcData.ativo) {
+        setUser(funcData)
+        await loadData() // only load all data after we have the user
+      } else {
+        await supabase.auth.signOut()
+        setUser(null)
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error('Error fetching user', error)
+      setLoading(false)
     }
-    return null
   }
 
-  const logout = () => setUser(null)
+  const loadData = async () => {
+    try {
+      const [
+        { data: clientesData },
+        { data: osData },
+        { data: estoqueData },
+        { data: financeiroData },
+        { data: funcData },
+        { data: ativData }
+      ] = await Promise.all([
+        supabase.from('clientes').select('*').order('id', { ascending: false }),
+        supabase.from('ordens_servico').select('*').order('id', { ascending: false }),
+        supabase.from('estoque').select('*').order('nome', { ascending: true }),
+        supabase.from('financeiro').select('*').order('data', { ascending: false }),
+        supabase.from('funcionarios').select('*').order('nome', { ascending: true }),
+        supabase.from('atividades').select('*').order('data_hora', { ascending: false })
+      ])
+
+      setClientes(clientesData || [])
+      setOrdensServico(osData || [])
+      setEstoque(estoqueData || [])
+      setFinanceiro(financeiroData || [])
+      setFuncionarios(funcData || [])
+      setAtividades(ativData || [])
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const login = async (email, senha) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha })
+    if (error || !data.user) {
+      return null
+    }
+    // Session change listener will handle the rest
+    return true
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+  }
 
   const addAtividade = async (acao, detalhes, modulo) => {
     if (!user) return

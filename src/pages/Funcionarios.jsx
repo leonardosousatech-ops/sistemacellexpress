@@ -81,7 +81,7 @@ export default function Funcionarios() {
     }
   };
 
-  const handleSubmit = async (e) => {
+    const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.nome || !formData.email || !formData.cargo) {
       if (addAlerta) addAlerta('Preencha os campos obrigatórios.', 'warning');
@@ -89,26 +89,45 @@ export default function Funcionarios() {
     }
 
     if (editingFuncionario) {
-      const { error } = await supabase.from('funcionarios').update(formData).eq('id', editingFuncionario.id);
-      if (error) {
+      const { data, error } = await supabase.rpc('admin_update_employee', {
+        p_id: editingFuncionario.id,
+        p_nome: formData.nome,
+        p_email: formData.email,
+        p_senha: formData.senha || null,
+        p_cargo: formData.cargo,
+        p_papeis: formData.papeis,
+        p_telefone: formData.telefone || null,
+        p_ativo: formData.ativo
+      });
+      if (error || !data) {
+         console.error(error);
          if (addAlerta) addAlerta('Erro ao atualizar funcionário no banco.', 'error');
          return;
       }
       
       const updatedFuncionarios = funcionarios.map(f =>
-        f.id === editingFuncionario.id ? { ...f, ...formData } : f
+        f.id === editingFuncionario.id ? { ...f, ...data } : f
       );
       if (setFuncionarios) setFuncionarios(updatedFuncionarios);
       if (addAtividade) addAtividade('Editou funcionário', `Editou os dados de ${formData.nome}`, 'funcionarios');
       if (addAlerta) addAlerta('Funcionário atualizado com sucesso.', 'success');
     } else {
-      const { data, error } = await supabase.from('funcionarios').insert([formData]).select();
+      const { data, error } = await supabase.rpc('admin_create_employee', {
+        p_nome: formData.nome,
+        p_email: formData.email,
+        p_senha: formData.senha,
+        p_cargo: formData.cargo,
+        p_papeis: formData.papeis,
+        p_telefone: formData.telefone || null,
+        p_ativo: formData.ativo
+      });
       if (error || !data) {
+         console.error(error);
          if (addAlerta) addAlerta('Erro ao cadastrar funcionário no banco.', 'error');
          return;
       }
       
-      if (setFuncionarios) setFuncionarios([...(funcionarios || []), data[0]]);
+      if (setFuncionarios) setFuncionarios([...(funcionarios || []), data]);
       if (addAtividade) addAtividade('Adicionou funcionário', `Cadastrou o funcionário ${formData.nome}`, 'funcionarios');
       if (addAlerta) addAlerta('Funcionário cadastrado com sucesso.', 'success');
     }

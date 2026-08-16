@@ -25,6 +25,14 @@ export default function ProfileModal({ isOpen, onClose }) {
     setIsSaving(true);
     
     try {
+      if (formData.senha || formData.email !== user.email) {
+        const { error: authError } = await supabase.auth.updateUser({ 
+          password: formData.senha || undefined, 
+          email: formData.email !== user.email ? formData.email : undefined 
+        });
+        if (authError) throw authError;
+      }
+
       const { data, error } = await supabase
         .from('funcionarios')
         .update({
