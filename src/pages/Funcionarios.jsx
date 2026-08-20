@@ -72,7 +72,7 @@ export default function Funcionarios() {
       } else {
         newPermissoes = newPermissoes.filter(p => p !== value);
       }
-      setFormData({ ...formData, permissoes: newPermissoes });
+      setFormData({ ...formData, papeis: newPermissoes });
     } else {
       setFormData({
         ...formData,
