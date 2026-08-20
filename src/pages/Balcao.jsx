@@ -242,7 +242,7 @@ export default function Balcao() {
 
   const filteredProducts = useMemo(() => {
     if (!estoque) return [];
-    return estoque.filter(p => p.nome.toLowerCase().includes(productSearch.toLowerCase()) && p.quantidade > 0).slice(0, 5);
+    return estoque.filter(p => p.nome.toLowerCase().includes(productSearch.toLowerCase())).slice(0, 15);
   }, [estoque, productSearch]);
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0);
@@ -501,9 +501,9 @@ export default function Balcao() {
                           <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.nome}</div>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary, #A0A0A0)' }}>Estoque: {p.quantidade} | R$ {p.preco_venda.toFixed(2)}</div>
                         </div>
-                        <button onClick={() => addToCart(p)} style={{ background: 'none', border: 'none', color: 'var(--success-color, #25D366)', cursor: 'pointer' }}>
-                          <PlusCircle size={18} />
-                        </button>
+                        <button onClick={() => addToCart(p)} disabled={p.quantidade <= 0} style={{ background: 'none', border: 'none', color: p.quantidade > 0 ? 'var(--success-color, #25D366)' : 'var(--text-muted, #555)', cursor: p.quantidade > 0 ? 'pointer' : 'not-allowed' }}>
+                            <PlusCircle size={18} />
+                          </button>
                       </div>
                     ))}
                   </div>
