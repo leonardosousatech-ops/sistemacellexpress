@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'logo.png'],
+      includeAssets: ['favicon.svg', 'app-icon.jpg'],
       manifest: {
         name: 'Cell Express - Gestão',
         short_name: 'Gestão Loja',
@@ -18,9 +18,9 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: '/logo.png',
+            src: '/app-icon.jpg',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/jpeg'
           }
         ]
       }
