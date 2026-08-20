@@ -46,8 +46,9 @@ export default function Layout({ children }) {
 
       {/* Sidebar */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="sidebar-logo" style={{ padding: '20px 20px 10px 20px', display: 'flex', justifyContent: 'center' }}>
-          <img src="/logo.jpg" alt="Cell Express" style={{ maxWidth: '100%', maxHeight: '40px', objectFit: 'contain' }} />
+        <div className="sidebar-logo">
+          <img src="/icon.png" alt="Logo" style={{ width: '42px', height: '42px', objectFit: 'contain', marginLeft: '-4px' }} />
+          <h1>CELL EXPRESS</h1>
         </div>
 
         <nav className="sidebar-nav">
