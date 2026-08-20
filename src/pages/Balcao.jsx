@@ -49,6 +49,9 @@ export default function Balcao() {
   // Sales state
   const [cart, setCart] = useState([]);
   const [productSearch, setProductSearch] = useState('');
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+  const [checkoutForm, setCheckoutForm] = useState({ clienteId: '', formaPagamento: 'PIX' });
+
 
   // Form states
   const [osForm, setOsForm] = useState({
@@ -208,16 +211,25 @@ export default function Balcao() {
     setCart(cart.filter(item => item.id !== id));
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (e) => {
+    e.preventDefault();
     if (cart.length === 0) return;
+    if (!checkoutForm.clienteId && checkoutForm.clienteId !== '0') {
+      if(addAlerta) addAlerta('Selecione um cliente para a venda', 'warning');
+      return;
+    }
     
-    const total = cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0);
+    // Calculate total based on payment method
+    const isCredit = checkoutForm.formaPagamento === 'Cartão de Crédito';
+    const total = cart.reduce((acc, item) => {
+      const price = isCredit ? (item.preco_credito || item.preco_venda * 1.15) : item.preco_venda;
+      return acc + (price * item.quantidadeCarrinho);
+    }, 0);
     
     // 1. Atualizar estoque
     for (const item of cart) {
       const novaQtd = item.quantidade - item.quantidadeCarrinho;
       await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id);
-      // Update local state optimistically
       setEstoque(prev => prev.map(p => p.id === item.id ? { ...p, quantidade: novaQtd } : p));
     }
     
@@ -226,11 +238,15 @@ export default function Balcao() {
       tipo: 'entrada',
       categoria: 'venda',
       valor: total,
-      descricao: `Venda avulsa: ${cart.map(i => `${i.quantidadeCarrinho}x ${i.nome}`).join(', ')}`
+      descricao: `Venda: ${cart.map(i => `${i.quantidadeCarrinho}x ${i.nome}`).join(', ')}`,
+      forma_pagamento: checkoutForm.formaPagamento,
+      id_cliente: checkoutForm.clienteId === '0' ? null : parseInt(checkoutForm.clienteId)
     }]).select();
 
     if (!finError && finData) {
       setFinanceiro(prev => [finData[0], ...(prev || [])]);
+    } else if (finError) {
+      console.error(finError);
     }
     
     if (addAtividade) addAtividade('Venda Realizada', `Valor Total: R$ ${total.toFixed(2)}`, 'balcao');
@@ -238,11 +254,13 @@ export default function Balcao() {
     
     setCart([]);
     setProductSearch('');
+    setIsCheckoutModalOpen(false);
+    setCheckoutForm({ clienteId: '', formaPagamento: 'PIX' });
   };
 
   const filteredProducts = useMemo(() => {
     if (!estoque) return [];
-    return estoque.filter(p => p.nome.toLowerCase().includes(productSearch.toLowerCase())).slice(0, 15);
+    return estoque.filter(p => p.nome.toLowerCase().includes(productSearch.toLowerCase())).slice(0, 50);
   }, [estoque, productSearch]);
 
   const cartTotal = cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0);
@@ -480,9 +498,9 @@ export default function Balcao() {
         </section>
 
         {/* Quick Sales Section */}
-        <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+        <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', marginBottom: '100px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h2 style={{ margin: 0, fontSize: '18px' }}>Venda Avulsa</h2>
+            <h2 style={{ margin: 0, fontSize: '18px' }}>Venda Avulsa (PDV)</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ position: 'relative' }}>
                 <Search size={18} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -491,76 +509,162 @@ export default function Balcao() {
                   placeholder="Buscar produto..."
                   value={productSearch}
                   onChange={e => setProductSearch(e.target.value)}
-                  style={{ padding: '8px 10px 8px 35px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', width: '250px' }}
+                  style={{ padding: '8px 10px 8px 35px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', width: '300px' }}
                 />
-                {productSearch && filteredProducts.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', marginTop: '5px', zIndex: 10, maxHeight: '200px', overflowY: 'auto' }}>
-                    {filteredProducts.map(p => (
-                      <div key={p.id} style={{ padding: '10px', borderBottom: '1px solid var(--border-color, #2a2a2a)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ fontSize: '13px', fontWeight: '500' }}>{p.nome}</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary, #A0A0A0)' }}>Estoque: {p.quantidade} | R$ {p.preco_venda.toFixed(2)}</div>
-                        </div>
-                        <button onClick={() => addToCart(p)} disabled={p.quantidade <= 0} style={{ background: 'none', border: 'none', color: p.quantidade > 0 ? 'var(--success-color, #25D366)' : 'var(--text-muted, #555)', cursor: p.quantidade > 0 ? 'pointer' : 'not-allowed' }}>
-                            <PlusCircle size={18} />
-                          </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>
 
-          <div style={{ padding: '20px', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '8px', backgroundColor: 'var(--bg-primary, #0a0a0a)' }}>
-            {cart.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-secondary, #A0A0A0)', padding: '20px 0' }}>
-                <ShoppingCart size={32} color="var(--text-secondary, #A0A0A0)" style={{ margin: '0 auto 10px auto' }} />
-                <p>O carrinho está vazio. Busque produtos acima para adicionar.</p>
-              </div>
-            ) : (
-              <div>
-                <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '20px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)', fontSize: '13px', textAlign: 'left' }}>
-                      <th style={{ padding: '8px' }}>Produto</th>
-                      <th style={{ padding: '8px' }}>Qtd</th>
-                      <th style={{ padding: '8px' }}>Preço Unit.</th>
-                      <th style={{ padding: '8px' }}>Total</th>
-                      <th style={{ padding: '8px', textAlign: 'center' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cart.map(item => (
-                      <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', fontSize: '13px' }}>
-                        <td style={{ padding: '8px' }}>{item.nome}</td>
-                        <td style={{ padding: '8px' }}>{item.quantidadeCarrinho}</td>
-                        <td style={{ padding: '8px' }}>R$ {item.preco_venda.toFixed(2)}</td>
-                        <td style={{ padding: '8px' }}>R$ {(item.preco_venda * item.quantidadeCarrinho).toFixed(2)}</td>
-                        <td style={{ padding: '8px', textAlign: 'center' }}>
-                          <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-color, #FF4444)', cursor: 'pointer' }}>
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color, #2a2a2a)', paddingTop: '15px' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 'bold' }}>
-                    Total: <span style={{ color: 'var(--accent-color, #FFD700)' }}>R$ {cartTotal.toFixed(2)}</span>
-                  </div>
-                  <button onClick={handleCheckout} className="btn btn-primary" style={{ padding: '10px 20px', backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    Finalizar Venda
-                  </button>
-                </div>
-              </div>
-            )}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)', fontSize: '13px', textAlign: 'left' }}>
+                  <th style={{ padding: '10px' }}>Produto</th>
+                  <th style={{ padding: '10px' }}>Estoque</th>
+                  <th style={{ padding: '10px' }}>Preço PIX</th>
+                  <th style={{ padding: '10px' }}>Preço Crédito</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map(p => (
+                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', opacity: p.quantidade > 0 ? 1 : 0.5 }}>
+                    <td style={{ padding: '10px', fontWeight: '500' }}>{p.nome}</td>
+                    <td style={{ padding: '10px' }}>
+                      <span className="status-badge" style={{ backgroundColor: p.quantidade > 0 ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 68, 68, 0.2)', color: p.quantidade > 0 ? '#25D366' : '#FF4444', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
+                        {p.quantidade} un
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px', color: '#25D366', fontWeight: 'bold' }}>R$ {p.preco_venda.toFixed(2)}</td>
+                    <td style={{ padding: '10px', color: '#FFD700', fontWeight: 'bold' }}>R$ {(p.preco_credito || (p.preco_venda * 1.15)).toFixed(2)}</td>
+                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                      <button onClick={() => addToCart(p)} disabled={p.quantidade <= 0} style={{ background: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', padding: '6px 12px', borderRadius: '4px', color: p.quantidade > 0 ? '#fff' : '#555', cursor: p.quantidade > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '5px', margin: '0 auto' }}>
+                        <PlusCircle size={14} /> Adicionar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredProducts.length === 0 && (
+                  <tr>
+                    <td colSpan="5" style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary, #A0A0A0)' }}>Nenhum produto encontrado.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
       </div>
 
-      {/* New OS Modal */}
+      {/* Floating Cart (Sacola) */}
+      {cart.length > 0 && (
+        <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '320px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 900, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', padding: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <ShoppingCart size={20} />
+            Sacola ({cart.reduce((acc, item) => acc + item.quantidadeCarrinho, 0)} itens)
+          </div>
+          <div style={{ padding: '15px', maxHeight: '300px', overflowY: 'auto' }}>
+            {cart.map(item => (
+              <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', borderBottom: '1px solid var(--border-color, #2a2a2a)', paddingBottom: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '13px', fontWeight: '500' }}>{item.nome}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary, #A0A0A0)' }}>{item.quantidadeCarrinho}x R$ {item.preco_venda.toFixed(2)}</div>
+                </div>
+                <button onClick={() => removeFromCart(item.id)} style={{ background: 'none', border: 'none', color: 'var(--danger-color, #FF4444)', cursor: 'pointer', padding: '5px' }}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div style={{ padding: '15px', borderTop: '1px solid var(--border-color, #2a2a2a)', backgroundColor: 'var(--bg-primary, #0a0a0a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', fontWeight: 'bold', fontSize: '16px' }}>
+              <span>Total (PIX):</span>
+              <span style={{ color: '#25D366' }}>R$ {cart.reduce((acc, item) => acc + (item.preco_venda * item.quantidadeCarrinho), 0).toFixed(2)}</span>
+            </div>
+            <button onClick={() => setIsCheckoutModalOpen(true)} className="btn btn-primary" style={{ width: '100%', padding: '12px', backgroundColor: 'var(--success-color, #25D366)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '15px' }}>
+              Finalizar Venda
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Checkout Modal */}
+      {isCheckoutModalOpen && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '500px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Finalizar Venda</h2>
+              <button onClick={() => setIsCheckoutModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                <X size={24} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleCheckout}>
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Cliente *</label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <select 
+                    className="form-input" 
+                    value={checkoutForm.clienteId} 
+                    onChange={(e) => setCheckoutForm({...checkoutForm, clienteId: e.target.value})}
+                    required
+                    style={{ flex: 1, padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                  >
+                    <option value="">Selecione um cliente...</option>
+                    <option value="0">Consumidor Final (Sem Cadastro)</option>
+                    {clientes?.map(c => (
+                      <option key={c.id} value={c.id}>{c.nome} ({c.telefone})</option>
+                    ))}
+                  </select>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => { setIsCheckoutModalOpen(false); setIsClientModalOpen(true); }}
+                    style={{ padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }}
+                  >
+                    Novo
+                  </button>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '25px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Forma de Pagamento *</label>
+                <select 
+                  className="form-input" 
+                  value={checkoutForm.formaPagamento} 
+                  onChange={(e) => setCheckoutForm({...checkoutForm, formaPagamento: e.target.value})}
+                  required
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                >
+                  <option value="PIX">PIX (Preço à vista)</option>
+                  <option value="Dinheiro">Dinheiro (Preço à vista)</option>
+                  <option value="Cartão de Débito">Cartão de Débito (Preço à vista)</option>
+                  <option value="Cartão de Crédito">Cartão de Crédito (+15%)</option>
+                </select>
+              </div>
+
+              <div style={{ backgroundColor: 'rgba(255, 215, 0, 0.1)', padding: '15px', borderRadius: '8px', marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '18px' }}>Total a Pagar:</span>
+                <span style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--accent-color, #FFD700)' }}>
+                  R$ {cart.reduce((acc, item) => {
+                    const price = checkoutForm.formaPagamento === 'Cartão de Crédito' ? (item.preco_credito || item.preco_venda * 1.15) : item.preco_venda;
+                    return acc + (price * item.quantidadeCarrinho);
+                  }, 0).toFixed(2)}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" onClick={() => setIsCheckoutModalOpen(false)} style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: 'transparent', border: '1px solid var(--border-color, #2a2a2a)', color: '#fff', cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+                <button type="submit" style={{ padding: '10px 20px', borderRadius: '4px', backgroundColor: 'var(--success-color, #25D366)', border: 'none', color: '#fff', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShoppingCart size={18} /> Confirmar Pagamento
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+{/* New OS Modal */}
       {isOsModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '20px' }}>
           <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '600px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
