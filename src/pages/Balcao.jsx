@@ -129,7 +129,7 @@ export default function Balcao() {
   const filteredOS = useMemo(() => {
     if (!ordensServico) return [];
     return ordensServico.filter(os => {
-      const cliente = clientes?.find(c => c.id === os.clienteId);
+      const cliente = clientes?.find(c => c.id === os.id_cliente);
       const matchesSearch = 
         os.id.toString().includes(searchQuery) ||
         (cliente && cliente.nome.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -157,7 +157,8 @@ export default function Balcao() {
       condicao: JSON.stringify(damageMarkers),
       problema: finalProblema,
       prioridade: finalPrioridade,
-      status: 'na-fila'
+      status: 'na-fila',
+      data_entrada: new Date().toISOString()
     };
 
     const { data, error } = await supabase.from('ordens_servico').insert([novaOS]).select();
@@ -449,7 +450,7 @@ export default function Balcao() {
                           )}
                         </div>
                       </td>
-                      <td data-label="Cliente" style={{ padding: '10px' }}>{clientes?.find(c => c.id === os.clienteId)?.nome || 'Desconhecido'}</td>
+                      <td data-label="Cliente" style={{ padding: '10px' }}>{clientes?.find(c => c.id === os.id_cliente)?.nome || 'Desconhecido'}</td>
                       <td data-label="Aparelho" style={{ padding: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <Smartphone size={14} />
@@ -466,7 +467,7 @@ export default function Balcao() {
                           {os.prioridade}
                         </span>
                       </td>
-                      <td data-label="Data Entrada" style={{ padding: '10px' }}>{new Date(os.dataEntrada).toLocaleDateString('pt-BR')}</td>
+                      <td data-label="Data Entrada" style={{ padding: '10px' }}>{new Date(os.data_entrada || os.created_at || new Date()).toLocaleDateString('pt-BR')}</td>
                       <td data-label="Ações" style={{ padding: '10px' }}>
                         <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => handleViewOS(os)}>Detalhes</button>
                       </td>
