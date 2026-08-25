@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient'
 import DamageMap from '../components/DamageMap'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
-  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2
+  Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2,
+  Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -15,6 +16,14 @@ const STATUS_LABELS = {
   'pronto': 'Pronto',
   'entregue': 'Entregue'
 }
+
+const KANBAN_COLUMNS = [
+  { key: 'na-fila', label: 'Na Fila', color: '#3B82F6', icon: Clock, bg: 'rgba(59, 130, 246, 0.1)' },
+  { key: 'em-analise', label: 'Em Análise', color: '#FFAA00', icon: Search, bg: 'rgba(255, 170, 0, 0.1)' },
+  { key: 'aguardando-peca', label: 'Aguardando Peça', color: '#FF4444', icon: AlertCircle, bg: 'rgba(255, 68, 68, 0.1)' },
+  { key: 'em-reparo', label: 'Em Reparo', color: '#A855F7', icon: Wrench, bg: 'rgba(168, 85, 247, 0.1)' },
+  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.1)' }
+]
 
 const NEXT_STATUS = {
   'na-fila': 'em-analise',
@@ -29,7 +38,12 @@ export default function Laboratorio() {
   const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta, setFinanceiro } = useData()
   const { user } = useAuth()
 
+  const [viewMode, setViewMode] = useState('kanban') // 'kanban' | 'grid'
   const [filterTab, setFilterTab] = useState('todos')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [draggedOSId, setDraggedOSId] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+
   const [selectedOS, setSelectedOS] = useState(null)
   const [pecaSelecionada, setPecaSelecionada] = useState('')
   const [qtdPeca, setQtdPeca] = useState(1)
@@ -48,19 +62,36 @@ export default function Laboratorio() {
     concluidasHoje: ordensServico.filter(os => os.status === 'pronto' && os.data_conclusao?.startsWith(today)).length
   }), [ordensServico, today])
 
-  // Filtered + Sorted OS
-  const filteredOS = useMemo(() => {
-    let list = ordensServico.filter(os => os.status !== 'entregue')
-    if (filterTab !== 'todos') list = list.filter(os => os.status === filterTab)
-    return list.sort((a, b) => {
-      const pd = (PRIORITY_ORDER[a.prioridade] || 99) - (PRIORITY_ORDER[b.prioridade] || 99)
-      if (pd !== 0) return pd
-      return new Date(a.data_entrada) - new Date(b.data_entrada)
-    })
-  }, [ordensServico, filterTab])
+  const getClientName = (id) => clientes.find(c => c.id === id)?.nome || 'Cliente Desconhecido'
 
-  const getClientName = (id) => clientes.find(c => c.id === id)?.nome || 'Desconhecido'
+  // Filtered OS by search query (ignoring delivered by default)
+  const activeOS = useMemo(() => {
+    return ordensServico
+      .filter(os => os.status !== 'entregue')
+      .filter(os => {
+        if (!searchTerm) return true
+        const term = searchTerm.toLowerCase()
+        const clientName = getClientName(os.id_cliente).toLowerCase()
+        const idMatch = `#${os.id}`.includes(term) || String(os.id).includes(term)
+        const modelMatch = (os.modelo || '').toLowerCase().includes(term)
+        const deviceMatch = (os.tipo_aparelho || '').toLowerCase().includes(term)
+        const problemMatch = (os.problema || '').toLowerCase().includes(term)
+        return idMatch || clientName.includes(term) || modelMatch || deviceMatch || problemMatch
+      })
+      .sort((a, b) => {
+        const pd = (PRIORITY_ORDER[a.prioridade] || 99) - (PRIORITY_ORDER[b.prioridade] || 99)
+        if (pd !== 0) return pd
+        return new Date(a.data_entrada) - new Date(b.data_entrada)
+      })
+  }, [ordensServico, searchTerm, clientes])
 
+  // Filtered for traditional Grid view
+  const gridFilteredOS = useMemo(() => {
+    if (filterTab === 'todos') return activeOS
+    return activeOS.filter(os => os.status === filterTab)
+  }, [activeOS, filterTab])
+
+  // Fetch iFixit guides
   const fetchIfixit = async (modelo) => {
     if (!modelo) return
     setLoadingIfixit(true)
@@ -81,6 +112,11 @@ export default function Laboratorio() {
     return estoque.some(e => e.nome.toLowerCase().includes(selectedOS.modelo.toLowerCase()) && e.precisa_aquecer)
   }, [selectedOS, estoque])
 
+  const checkNeedsHeatByModel = (modelo) => {
+    if (!modelo) return false
+    return estoque.some(e => e.nome.toLowerCase().includes(modelo.toLowerCase()) && e.precisa_aquecer)
+  }
+
   const handleSetSeparadora = async (precisa) => {
     if (!selectedOS || !selectedOS.modelo) return
     const { error } = await supabase.from('estoque')
@@ -88,7 +124,7 @@ export default function Laboratorio() {
       .ilike('nome', `%${selectedOS.modelo}%`)
     
     if (error) {
-      if(addAlerta) addAlerta('Erro ao atualizar banco de dados', 'error')
+      if (addAlerta) addAlerta('Erro ao atualizar banco de dados', 'error')
       return
     }
     
@@ -99,7 +135,7 @@ export default function Laboratorio() {
       return e
     })
     setEstoque(updatedEstoque)
-    if(addAlerta) addAlerta(`Configurado! ${selectedOS.modelo} usa separadora.`, 'success')
+    if (addAlerta) addAlerta(`Configurado! ${selectedOS.modelo} usa separadora.`, 'success')
   }
 
   const handleOpenOS = (os) => {
@@ -109,8 +145,9 @@ export default function Laboratorio() {
     fetchIfixit(os.modelo)
   }
 
-  const handleUpdateStatus = async (newStatus) => {
-    if (!selectedOS) return
+  // Generalized status updater
+  const handleUpdateStatus = async (newStatus, targetOS = selectedOS) => {
+    if (!targetOS) return
     const updates = { status: newStatus }
     if (newStatus === 'pronto') {
       const now = new Date()
@@ -120,17 +157,54 @@ export default function Laboratorio() {
       updates.garantia_ate = g.toISOString().split('T')[0]
     }
     
-    const { error } = await supabase.from('ordens_servico').update(updates).eq('id', selectedOS.id)
+    const { error } = await supabase.from('ordens_servico').update(updates).eq('id', targetOS.id)
     if (error) {
-      if(addAlerta) addAlerta('Erro ao atualizar status no banco', 'error')
+      if (addAlerta) addAlerta('Erro ao atualizar status no banco', 'error')
       return
     }
 
-    const updated = { ...selectedOS, ...updates }
-    setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
-    setSelectedOS(updated)
-    if(addAtividade) addAtividade('Status Atualizado', `OS #${selectedOS.id} → ${STATUS_LABELS[newStatus]}`, 'laboratorio')
-    if(addAlerta) addAlerta(`OS #${selectedOS.id} atualizada para ${STATUS_LABELS[newStatus]}`, 'success')
+    const updated = { ...targetOS, ...updates }
+    setOrdensServico(prev => prev.map(os => os.id === targetOS.id ? updated : os))
+    if (selectedOS && selectedOS.id === targetOS.id) {
+      setSelectedOS(updated)
+    }
+    if (addAtividade) addAtividade('Status Atualizado', `OS #${targetOS.id} → ${STATUS_LABELS[newStatus]}`, 'laboratorio')
+    if (addAlerta) addAlerta(`OS #${targetOS.id} movida para ${STATUS_LABELS[newStatus]}`, 'success')
+  }
+
+  // Drag & Drop Handlers
+  const handleDragStart = (e, osId) => {
+    e.dataTransfer.setData('text/plain', osId)
+    e.dataTransfer.effectAllowed = 'move'
+    setDraggedOSId(osId)
+  }
+
+  const handleDragOver = (e, columnKey) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (dragOverColumn !== columnKey) {
+      setDragOverColumn(columnKey)
+    }
+  }
+
+  const handleDragLeave = (e, columnKey) => {
+    e.preventDefault()
+    if (dragOverColumn === columnKey) {
+      setDragOverColumn(null)
+    }
+  }
+
+  const handleDrop = async (e, targetStatus) => {
+    e.preventDefault()
+    setDragOverColumn(null)
+    const osId = e.dataTransfer.getData('text/plain') || draggedOSId
+    setDraggedOSId(null)
+    if (!osId) return
+
+    const targetOS = ordensServico.find(os => os.id === Number(osId))
+    if (!targetOS || targetOS.status === targetStatus) return
+
+    await handleUpdateStatus(targetStatus, targetOS)
   }
 
   const handleAddPeca = async () => {
@@ -138,7 +212,7 @@ export default function Laboratorio() {
     const peca = estoque.find(e => e.id === Number(pecaSelecionada))
     const qtd = Number(qtdPeca)
     if (!peca || peca.quantidade < qtd) {
-      if(addAlerta) addAlerta('Estoque insuficiente!', 'error')
+      if (addAlerta) addAlerta('Estoque insuficiente!', 'error')
       return
     }
     const pecasUsadas = [...(selectedOS.pecas_usadas || []), { id_item: peca.id, quantidade: qtd }]
@@ -147,7 +221,7 @@ export default function Laboratorio() {
     // Update OS
     const { error: osError } = await supabase.from('ordens_servico').update({ pecas_usadas: pecasUsadas }).eq('id', selectedOS.id)
     if (osError) {
-      if(addAlerta) addAlerta('Erro ao salvar peça na OS', 'error')
+      if (addAlerta) addAlerta('Erro ao salvar peça na OS', 'error')
       return
     }
 
@@ -155,15 +229,15 @@ export default function Laboratorio() {
     const novaQtd = peca.quantidade - qtd
     const { error: estError } = await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', peca.id)
     if (estError) {
-      if(addAlerta) addAlerta('Erro ao dar baixa no estoque', 'error')
+      if (addAlerta) addAlerta('Erro ao dar baixa no estoque', 'error')
       return
     }
 
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setEstoque(prev => prev.map(item => item.id === peca.id ? { ...item, quantidade: novaQtd } : item))
     setSelectedOS(updated)
-    if(addAtividade) addAtividade('Peça Adicionada', `${qtd}x ${peca.nome} na OS #${selectedOS.id}`, 'laboratorio')
-    if(addAlerta) addAlerta(`${peca.nome} adicionada à OS e baixada do estoque`, 'success')
+    if (addAtividade) addAtividade('Peça Adicionada', `${qtd}x ${peca.nome} na OS #${selectedOS.id}`, 'laboratorio')
+    if (addAlerta) addAlerta(`${peca.nome} adicionada à OS e baixada do estoque`, 'success')
     setPecaSelecionada('')
     setQtdPeca(1)
   }
@@ -172,66 +246,64 @@ export default function Laboratorio() {
     if (!selectedOS) return
     const { error } = await supabase.from('ordens_servico').update({ url_esquema: esquemaUrlInput }).eq('id', selectedOS.id)
     if (error) {
-      if(addAlerta) addAlerta('Erro ao salvar URL do esquema. Você adicionou a coluna url_esquema no banco?', 'error')
+      if (addAlerta) addAlerta('Erro ao salvar URL do esquema.', 'error')
       return
     }
     const updated = { ...selectedOS, url_esquema: esquemaUrlInput }
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
-    if(addAlerta) addAlerta('Esquema elétrico salvo com sucesso!', 'success')
+    if (addAlerta) addAlerta('Esquema elétrico salvo com sucesso!', 'success')
   }
 
-  
   const handleSaveValor = async () => {
     if (!selectedOS) return
     const novoValor = parseFloat(valorInput)
     if (isNaN(novoValor)) {
-      if(addAlerta) addAlerta('Valor inválido', 'warning')
+      if (addAlerta) addAlerta('Valor inválido', 'warning')
       return
     }
     const { error } = await supabase.from('ordens_servico').update({ valor: novoValor }).eq('id', selectedOS.id)
     if (error) {
-      if(addAlerta) addAlerta('Erro ao salvar valor', 'error')
+      if (addAlerta) addAlerta('Erro ao salvar valor', 'error')
       return
     }
     const updated = { ...selectedOS, valor: novoValor }
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
-    if(addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
+    if (addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
   }
 
-  
   const handleDeleteOS = async () => {
-    if (!window.confirm('Tem certeza que deseja APAGAR esta OS? Isso não pode ser desfeito!')) return;
+    if (!window.confirm('Tem certeza que deseja APAGAR esta OS? Isso não pode ser desfeito!')) return
     
-    const { error } = await supabase.from('ordens_servico').delete().eq('id', selectedOS.id);
+    const { error } = await supabase.from('ordens_servico').delete().eq('id', selectedOS.id)
     if (error) {
-      if(addAlerta) addAlerta('Erro ao excluir OS.', 'error');
-      return;
+      if (addAlerta) addAlerta('Erro ao excluir OS.', 'error')
+      return
     }
     
-    setOrdensServico(prev => prev.filter(os => os.id !== selectedOS.id));
-    setSelectedOS(null);
-    if(addAtividade) addAtividade('OS Excluída', `OS #${selectedOS.id} excluída permanentemente`, 'laboratorio');
-    if(addAlerta) addAlerta('OS apagada com sucesso.', 'success');
+    setOrdensServico(prev => prev.filter(os => os.id !== selectedOS.id))
+    setSelectedOS(null)
+    if (addAtividade) addAtividade('OS Excluída', `OS #${selectedOS.id} excluída permanentemente`, 'laboratorio')
+    if (addAlerta) addAlerta('OS apagada com sucesso.', 'success')
   }
 
   const handleDeliverAndPay = async () => {
     if (!selectedOS.valor) {
-      if(addAlerta) addAlerta('Defina e salve o valor da OS antes de pagar e entregar!', 'warning')
+      if (addAlerta) addAlerta('Defina e salve o valor da OS antes de pagar e entregar!', 'warning')
       return
     }
     
-    // Inserir no financeiro
     const { data: finData, error: finError } = await supabase.from('financeiro').insert([{
       tipo: 'entrada',
       categoria: 'servico',
       valor: selectedOS.valor,
-      descricao: `Pagamento OS #${selectedOS.id} - ${selectedOS.modelo}`
+      descricao: `Pagamento OS #${selectedOS.id} - ${selectedOS.modelo}`,
+      id_cliente: selectedOS.id_cliente
     }]).select()
 
     if (finError) {
-      if(addAlerta) addAlerta('Erro ao registrar no financeiro', 'error')
+      if (addAlerta) addAlerta('Erro ao registrar no financeiro', 'error')
       return
     }
 
@@ -239,26 +311,25 @@ export default function Laboratorio() {
       setFinanceiro(prev => [finData[0], ...(prev || [])])
     }
 
-    // Atualizar status para entregue e data
     const now = new Date()
     const { error: osError } = await supabase.from('ordens_servico').update({ status: 'entregue', data_conclusao: now.toISOString() }).eq('id', selectedOS.id)
     if (osError) {
-      if(addAlerta) addAlerta('Erro ao atualizar OS', 'error')
+      if (addAlerta) addAlerta('Erro ao atualizar OS', 'error')
       return
     }
 
     const updated = { ...selectedOS, status: 'entregue', data_conclusao: now.toISOString() }
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
-    if(addAtividade) addAtividade('OS Entregue e Paga', `OS #${selectedOS.id} entregue (R$ ${selectedOS.valor})`, 'laboratorio')
-    if(addAlerta) addAlerta('OS entregue e pagamento registrado com sucesso!', 'success')
+    if (addAtividade) addAtividade('OS Entregue e Paga', `OS #${selectedOS.id} entregue (R$ ${selectedOS.valor})`, 'laboratorio')
+    if (addAlerta) addAlerta('OS entregue e pagamento registrado com sucesso!', 'success')
   }
 
   const getPecaNome = (id_item) => estoque.find(e => e.id === id_item)?.nome || 'Peça removida'
 
   const handlePrint = () => {
-    if (!selectedOS) return;
-    const printWindow = window.open('', '_blank');
+    if (!selectedOS) return
+    const printWindow = window.open('', '_blank')
     printWindow.document.write(`
       <html>
         <head>
@@ -307,8 +378,8 @@ export default function Laboratorio() {
           </script>
         </body>
       </html>
-    `);
-    printWindow.document.close();
+    `)
+    printWindow.document.close()
   }
 
   const tabs = [
@@ -319,6 +390,140 @@ export default function Laboratorio() {
     { key: 'em-reparo', label: 'Em Reparo' },
     { key: 'pronto', label: 'Prontos' },
   ]
+
+  // Render a Single Kanban Card
+  const renderOSCard = (os) => {
+    const isHeating = checkNeedsHeatByModel(os.modelo)
+    const priorityColor = os.prioridade === 'urgente' 
+      ? 'var(--danger, #FF4444)' 
+      : os.prioridade === 'alta' 
+      ? 'var(--warning, #FFAA00)' 
+      : os.prioridade === 'normal' 
+      ? 'var(--info, #3B82F6)' 
+      : 'var(--border, #444)'
+
+    return (
+      <div
+        key={os.id}
+        draggable
+        onDragStart={(e) => handleDragStart(e, os.id)}
+        onClick={() => handleOpenOS(os)}
+        style={{
+          backgroundColor: 'var(--bg-elevated, #1a1a1a)',
+          borderRadius: '8px',
+          padding: '14px',
+          marginBottom: '12px',
+          border: '1px solid var(--border, #2a2a2a)',
+          borderLeft: `4px solid ${priorityColor}`,
+          cursor: 'grab',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+          transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
+          userSelect: 'none'
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.4)'
+          e.currentTarget.style.borderColor = 'var(--border-hover, #444)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)'
+          e.currentTarget.style.borderColor = 'var(--border, #2a2a2a)'
+        }}
+      >
+        {/* Card Header: ID, Priority, Date */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span style={{ fontWeight: '800', fontSize: '0.9rem', color: 'var(--text-primary, #fff)' }}>
+            OS #{os.id}
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className={`priority-badge ${os.prioridade}`} style={{ fontSize: '10px', padding: '2px 6px', textTransform: 'uppercase' }}>
+              {os.prioridade}
+            </span>
+          </div>
+        </div>
+
+        {/* Customer & Device */}
+        <div style={{ marginBottom: '6px' }}>
+          <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--accent-yellow, #FFD700)' }}>
+            {getClientName(os.id_cliente)}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary, #A0A0A0)' }}>
+            {os.tipo_aparelho} • <strong>{os.modelo}</strong>
+          </div>
+        </div>
+
+        {/* Problem preview */}
+        <div style={{ 
+          fontSize: '0.78rem', 
+          color: 'var(--text-muted, #888)', 
+          marginBottom: '10px',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+          lineHeight: '1.3'
+        }}>
+          {os.problema || 'Nenhum detalhe informado.'}
+        </div>
+
+        {/* Badges and Quick Next Button */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          borderTop: '1px solid rgba(255,255,255,0.06)', 
+          paddingTop: '8px',
+          fontSize: '0.75rem' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            {os.valor ? (
+              <span style={{ color: 'var(--success, #25D366)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <DollarSign size={12} /> R$ {os.valor.toFixed(2)}
+              </span>
+            ) : (
+              <span style={{ color: 'var(--text-muted, #666)' }}>Sem valor</span>
+            )}
+            {isHeating && (
+              <span title="Requer Separadora Térmica" style={{ color: 'var(--danger, #FF4444)', display: 'flex', alignItems: 'center' }}>
+                <Flame size={13} />
+              </span>
+            )}
+            {os.pecas_usadas?.length > 0 && (
+              <span title={`${os.pecas_usadas.length} peças vinculadas`} style={{ color: 'var(--info, #3B82F6)', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                <Package size={12} /> {os.pecas_usadas.length}
+              </span>
+            )}
+          </div>
+
+          {/* Advance button */}
+          {NEXT_STATUS[os.status] && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleUpdateStatus(NEXT_STATUS[os.status], os)
+              }}
+              title={`Avançar para ${STATUS_LABELS[NEXT_STATUS[os.status]]}`}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: 'var(--text-primary, #fff)',
+                borderRadius: '4px',
+                padding: '3px 6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '11px'
+              }}
+            >
+              <ArrowRight size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -346,52 +551,226 @@ export default function Laboratorio() {
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="card" style={{ marginTop: '24px' }}>
-        <div className="tabs">
-          {tabs.map(t => (
-            <button key={t.key} className={`tab ${filterTab === t.key ? 'active' : ''}`} onClick={() => setFilterTab(t.key)}>
-              {t.label}
+      {/* Control Bar: Search & View Switch */}
+      <div className="card" style={{ marginTop: '24px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1', minWidth: '240px', maxWidth: '400px' }}>
+          <Search size={18} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Buscar por OS, cliente, modelo ou problema..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            style={{ paddingLeft: '38px', width: '100%', backgroundColor: 'var(--bg-primary, #0a0a0a)' }}
+          />
+          {searchTerm && (
+            <button 
+              onClick={() => setSearchTerm('')}
+              style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}
+            >
+              <X size={14} />
             </button>
-          ))}
-        </div>
-
-        {/* OS Cards Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
-          {filteredOS.map(os => (
-            <div key={os.id} className="card" onClick={() => handleOpenOS(os)}
-              style={{ cursor: 'pointer', borderLeft: `3px solid ${os.prioridade === 'urgente' ? 'var(--danger)' : os.prioridade === 'alta' ? 'var(--warning)' : 'var(--border)'}` }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ fontWeight: '700', fontSize: '1rem' }}>OS #{os.id}</span>
-                <span className={`status-badge ${os.status}`}>{STATUS_LABELS[os.status]}</span>
-              </div>
-              <div style={{ marginBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Cliente</span>
-                <div style={{ fontWeight: '600' }}>{getClientName(os.id_cliente)}</div>
-              </div>
-              <div style={{ marginBottom: '8px' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Aparelho</span>
-                <div>{os.tipo_aparelho} — {os.modelo}</div>
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Problema</span>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{os.problema}</div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
-                <span className={`priority-badge ${os.prioridade}`}>{os.prioridade}</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(os.data_entrada).toLocaleDateString('pt-BR')}</span>
-              </div>
-            </div>
-          ))}
-          {filteredOS.length === 0 && (
-            <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
-              <div className="empty-icon"><Search size={28} /></div>
-              <h4>Nenhuma OS encontrada</h4>
-              <p>Não há ordens de serviço com o filtro selecionado.</p>
-            </div>
           )}
         </div>
+
+        {/* View mode toggle button */}
+        <div style={{ display: 'flex', background: 'var(--bg-primary, #0a0a0a)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border, #2a2a2a)' }}>
+          <button
+            onClick={() => setViewMode('kanban')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              background: viewMode === 'kanban' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+              color: viewMode === 'kanban' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+              fontWeight: viewMode === 'kanban' ? '700' : '500',
+              cursor: 'pointer',
+              fontSize: '13px',
+              transition: 'all 150ms ease'
+            }}
+          >
+            <Kanban size={16} /> Kanban
+          </button>
+          <button
+            onClick={() => setViewMode('grid')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              border: 'none',
+              background: viewMode === 'grid' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+              color: viewMode === 'grid' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+              fontWeight: viewMode === 'grid' ? '700' : '500',
+              cursor: 'pointer',
+              fontSize: '13px',
+              transition: 'all 150ms ease'
+            }}
+          >
+            <LayoutGrid size={16} /> Grade
+          </button>
+        </div>
       </div>
+
+      {/* Main Content: Kanban or Grid */}
+      {viewMode === 'kanban' ? (
+        <div 
+          className="kanban-board-container"
+          style={{ 
+            marginTop: '20px', 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', 
+            gap: '16px', 
+            overflowX: 'auto', 
+            paddingBottom: '20px',
+            alignItems: 'start'
+          }}
+        >
+          {KANBAN_COLUMNS.map(col => {
+            const colItems = activeOS.filter(os => os.status === col.key)
+            const isOver = dragOverColumn === col.key
+            const Icon = col.icon
+
+            return (
+              <div
+                key={col.key}
+                onDragOver={(e) => handleDragOver(e, col.key)}
+                onDragLeave={(e) => handleDragLeave(e, col.key)}
+                onDrop={(e) => handleDrop(e, col.key)}
+                style={{
+                  backgroundColor: isOver ? 'rgba(255, 215, 0, 0.05)' : 'var(--card-bg, #141414)',
+                  borderRadius: '10px',
+                  border: isOver ? '2px dashed var(--accent-yellow, #FFD700)' : '1px solid var(--border, #2a2a2a)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  maxHeight: 'calc(100vh - 260px)',
+                  minHeight: '380px',
+                  transition: 'background-color 200ms ease, border-color 200ms ease',
+                  overflow: 'hidden'
+                }}
+              >
+                {/* Column Header */}
+                <div style={{ 
+                  padding: '14px 16px', 
+                  borderBottom: '1px solid var(--border, #2a2a2a)', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  backgroundColor: 'var(--bg-elevated, #1a1a1a)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ 
+                      width: '28px', 
+                      height: '28px', 
+                      borderRadius: '6px', 
+                      backgroundColor: col.bg, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      color: col.color 
+                    }}>
+                      <Icon size={16} />
+                    </div>
+                    <span style={{ fontWeight: '700', fontSize: '0.9rem', color: 'var(--text-primary, #fff)' }}>
+                      {col.label}
+                    </span>
+                  </div>
+                  <span style={{ 
+                    backgroundColor: 'rgba(255,255,255,0.08)', 
+                    color: 'var(--text-primary, #fff)', 
+                    padding: '2px 8px', 
+                    borderRadius: '12px', 
+                    fontSize: '0.75rem', 
+                    fontWeight: '700' 
+                  }}>
+                    {colItems.length}
+                  </span>
+                </div>
+
+                {/* Column Body / Drop Zone */}
+                <div style={{ 
+                  padding: '12px', 
+                  overflowY: 'auto', 
+                  flex: 1, 
+                  display: 'flex', 
+                  flexDirection: 'column' 
+                }}>
+                  {colItems.map(os => renderOSCard(os))}
+
+                  {colItems.length === 0 && (
+                    <div style={{ 
+                      flex: 1, 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      color: 'var(--text-muted, #555)', 
+                      fontSize: '0.8rem',
+                      padding: '30px 10px',
+                      textAlign: 'center',
+                      border: '1px dashed rgba(255,255,255,0.05)',
+                      borderRadius: '6px',
+                      margin: '6px 0'
+                    }}>
+                      <span>Arraste uma OS aqui</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        /* Traditional Filtered Grid View */
+        <div className="card" style={{ marginTop: '20px' }}>
+          <div className="tabs">
+            {tabs.map(t => (
+              <button key={t.key} className={`tab ${filterTab === t.key ? 'active' : ''}`} onClick={() => setFilterTab(t.key)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '16px' }}>
+            {gridFilteredOS.map(os => (
+              <div key={os.id} className="card" onClick={() => handleOpenOS(os)}
+                style={{ cursor: 'pointer', borderLeft: `3px solid ${os.prioridade === 'urgente' ? 'var(--danger)' : os.prioridade === 'alta' ? 'var(--warning)' : 'var(--border)'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ fontWeight: '700', fontSize: '1rem' }}>OS #{os.id}</span>
+                  <span className={`status-badge ${os.status}`}>{STATUS_LABELS[os.status]}</span>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Cliente</span>
+                  <div style={{ fontWeight: '600' }}>{getClientName(os.id_cliente)}</div>
+                </div>
+                <div style={{ marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Aparelho</span>
+                  <div>{os.tipo_aparelho} — {os.modelo}</div>
+                </div>
+                <div style={{ marginBottom: '12px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Problema</span>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{os.problema}</div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+                  <span className={`priority-badge ${os.prioridade}`}>{os.prioridade}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{new Date(os.data_entrada).toLocaleDateString('pt-BR')}</span>
+                </div>
+              </div>
+            ))}
+            {gridFilteredOS.length === 0 && (
+              <div className="empty-state" style={{ gridColumn: '1 / -1' }}>
+                <div className="empty-icon"><Search size={28} /></div>
+                <h4>Nenhuma OS encontrada</h4>
+                <p>Não há ordens de serviço com o filtro selecionado.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* OS Detail Modal */}
       {selectedOS && (
@@ -450,42 +829,42 @@ export default function Laboratorio() {
                     <div>{new Date(selectedOS.data_entrada).toLocaleString('pt-BR')}</div>
                   </div>
                   <div className="form-group">
-                      <label>Valor da OS</label>
-                      {selectedOS.status !== 'entregue' ? (
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <input 
-                            type="number" 
-                            className="form-input" 
-                            placeholder="R$ 0.00" 
-                            value={valorInput} 
-                            onChange={e => setValorInput(e.target.value)} 
-                            style={{ flex: 1, padding: '8px' }} 
-                          />
-                          <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar</button>
-                        </div>
-                      ) : (
-                         <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
-                      )}
-                    </div>
+                    <label>Valor da OS</label>
+                    {selectedOS.status !== 'entregue' ? (
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input 
+                          type="number" 
+                          className="form-input" 
+                          placeholder="R$ 0.00" 
+                          value={valorInput} 
+                          onChange={e => setValorInput(e.target.value)} 
+                          style={{ flex: 1, padding: '8px' }} 
+                        />
+                        <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar</button>
+                      </div>
+                    ) : (
+                       <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-                {/* Separadora Info */}
-                <div style={{ marginBottom: '24px', padding: '15px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Flame size={18} color="var(--danger, #FF4444)" /> Aparelho usa Separadora?
-                  </h4>
-                  {modelNeedsHeat ? (
-                    <p style={{ color: 'var(--danger)', fontWeight: 'bold' }}>Sim, este aparelho desmonta com calor!</p>
-                  ) : (
-                    <div>
-                      <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>Se este aparelho precisa de separadora, confirme abaixo para salvar no sistema:</p>
-                      <button className="btn btn-secondary" onClick={() => handleSetSeparadora(true)} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>
-                        <Flame size={14} style={{ marginRight: '6px' }} /> Sim, precisa de separadora
-                      </button>
-                    </div>
-                  )}
-                </div>
+              {/* Separadora Info */}
+              <div style={{ marginBottom: '24px', padding: '15px', background: 'var(--bg-hover)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Flame size={18} color="var(--danger, #FF4444)" /> Aparelho usa Separadora?
+                </h4>
+                {modelNeedsHeat ? (
+                  <p style={{ color: 'var(--danger)', fontWeight: 'bold' }}>Sim, este aparelho desmonta com calor!</p>
+                ) : (
+                  <div>
+                    <p style={{ color: 'var(--text-muted)', marginBottom: '10px' }}>Se este aparelho precisa de separadora, confirme abaixo para salvar no sistema:</p>
+                    <button className="btn btn-secondary" onClick={() => handleSetSeparadora(true)} style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}>
+                      <Flame size={14} style={{ marginRight: '6px' }} /> Sim, precisa de separadora
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Status Actions */}
               {selectedOS.status !== 'pronto' && selectedOS.status !== 'entregue' && (
@@ -502,12 +881,15 @@ export default function Laboratorio() {
                         <Pause size={14} /> Aguardando Peça
                       </button>
                     )}
-                    {selectedOS.status === 'pronto' && (
-                      <button className="btn btn-primary" onClick={handleDeliverAndPay} style={{ backgroundColor: 'var(--success)', color: '#000', fontWeight: 'bold' }}>
-                        <CheckCircle size={14} /> Pagar e Entregar
-                      </button>
-                    )}
                   </div>
+                </div>
+              )}
+
+              {selectedOS.status === 'pronto' && (
+                <div style={{ marginBottom: '24px' }}>
+                  <button className="btn btn-primary" onClick={handleDeliverAndPay} style={{ backgroundColor: 'var(--success)', color: '#000', fontWeight: 'bold', width: '100%', padding: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                    <CheckCircle size={18} /> Pagar e Entregar OS
+                  </button>
                 </div>
               )}
 
