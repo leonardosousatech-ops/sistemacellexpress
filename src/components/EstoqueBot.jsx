@@ -7,7 +7,13 @@ import { useAuth, useData } from '../App';
 export default function EstoqueBot({ addAlerta }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'system', content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda em português, de forma concisa e direta. Quando o usuário pedir para buscar, adicionar, alterar estoque ou listar pedidos, USE AS FERRAMENTAS ('tools') fornecidas. Se o usuário passar apenas um valor ao adicionar um produto (ex: 'tela moto g30 100'), considere esse valor como o preço de custo. Nunca invente dados do estoque, apenas baseie-se nos resultados das ferramentas." },
+    { 
+      role: 'system', 
+      content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda sempre em português, de forma amigável, clara e concisa.\n" +
+               "Quando o usuário pedir para cadastrar, acrescentar, adicionar, buscar ou alterar produtos, USE AS FERRAMENTAS ('tools') fornecidas.\n" +
+               "Se o usuário escrever algo como 'acrescenta tela moto g 30 vivid com aro 100', entenda 'tela moto g 30 vivid com aro' como o nome do produto e '100' como o preço de custo (ou 1 unidade caso não tenha especificado).\n" +
+               "Seja proativo e chame a função correspondente imediatamente."
+    },
     { role: 'assistant', content: 'Olá! Sou seu Assistente IA de Estoque. Posso pesquisar produtos, adicionar novos, alterar quantidades ou gerar listas de pedidos. Como posso ajudar?' }
   ]);
   const [input, setInput] = useState('');
@@ -33,19 +39,26 @@ export default function EstoqueBot({ addAlerta }) {
     scrollToBottom();
   }, [messages, isOpen]);
 
-  // Helper to call Groq with model fallback
+  // Helper to call Groq with active model fallbacks
   const createChatCompletionWithFallback = async (groqClient, payload) => {
-    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.1-70b-versatile', 'mixtral-8x7b-32768'];
+    const preferredModels = [
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-20b',
+      'openai/gpt-oss-120b',
+      'qwen/qwen3.6-27b',
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant'
+    ];
     let lastError = null;
 
-    for (const model of models) {
+    for (const model of preferredModels) {
       try {
         return await groqClient.chat.completions.create({
           ...payload,
           model
         });
       } catch (err) {
-        console.warn(`Groq request failed with model ${model}, trying fallback...`, err);
+        console.warn(`Groq model ${model} error, tentando próximo:`, err?.message || err);
         lastError = err;
       }
     }
@@ -72,7 +85,7 @@ export default function EstoqueBot({ addAlerta }) {
       type: 'function',
       function: {
         name: 'adicionar_produto',
-        description: 'Cria e cadastra um novo produto no banco de dados de estoque.',
+        description: 'Cria e cadastra um novo produto no banco de dados de estoque da loja.',
         parameters: {
           type: 'object',
           properties: {
@@ -162,7 +175,7 @@ export default function EstoqueBot({ addAlerta }) {
 
         return { 
           success: true, 
-          message: 'Produto adicionado com sucesso', 
+          message: `Produto '${args.nome}' cadastrado com sucesso com ${qtd} unidade(s), Custo: R$ ${custo.toFixed(2)}, Venda PIX: R$ ${venda.toFixed(2)}, Crédito: R$ ${credito.toFixed(2)}.`, 
           produto: data[0] 
         };
       }
@@ -262,13 +275,14 @@ export default function EstoqueBot({ addAlerta }) {
         responseMessage = response.choices[0].message;
       }
 
+      // If content is present, append to messages
       setMessages(prev => [...currentMessages, responseMessage]);
 
     } catch (error) {
       console.error("Chat erro Groq:", error);
       const errMsg = error?.message?.includes('Rate limit') 
         ? "Limite temporário de requisições atingido. Por favor, aguarde alguns segundos."
-        : "Desculpe, ocorreu um erro ao se comunicar com a IA da Groq. Verifique a chave de API.";
+        : "Desculpe, ocorreu um erro ao se comunicar com a IA da Groq. Tente novamente.";
       setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
       setIsLoading(false);
@@ -398,7 +412,7 @@ export default function EstoqueBot({ addAlerta }) {
                 <div style={{ width: '30px', height: '30px', borderRadius: '50%', backgroundColor: 'rgba(255,215,0,0.1)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <Bot size={16} color="var(--accent-color, #FFD700)" />
                 </div>
-                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 4px', backgroundColor: '#2a2a2a', color: 'var(--text-secondary, #A0A0A0)' }}>
+                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 4px', backgroundColor: '#2a2a2a', color: 'var(--text-secondary)' }}>
                   <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} />
                 </div>
               </div>
