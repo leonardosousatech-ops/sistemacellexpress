@@ -4,7 +4,7 @@ import Groq from 'groq-sdk';
 import { supabase } from '../supabaseClient';
 import { useAuth, useData } from '../App';
 
-export default function EstoqueBot({ addAlerta }) {
+export default function EstoqueBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { 
@@ -12,7 +12,7 @@ export default function EstoqueBot({ addAlerta }) {
       content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda sempre em português, de forma amigável, clara e concisa.\n" +
                "Quando o usuário pedir para cadastrar, acrescentar, adicionar, buscar ou alterar produtos, USE AS FERRAMENTAS ('tools') fornecidas.\n" +
                "Se o usuário escrever algo como 'acrescenta tela moto g 30 vivid com aro 100', entenda 'tela moto g 30 vivid com aro' como o nome do produto e '100' como o preço de custo (ou 1 unidade caso não tenha especificado).\n" +
-               "Seja proativo e chame a função correspondente imediatamente."
+               "Ao adicionar um produto com sucesso, dê uma resposta curta e confirme o nome, quantidade e valores calculados."
     },
     { role: 'assistant', content: 'Olá! Sou seu Assistente IA de Estoque. Posso pesquisar produtos, adicionar novos, alterar quantidades ou gerar listas de pedidos. Como posso ajudar?' }
   ]);
@@ -20,7 +20,7 @@ export default function EstoqueBot({ addAlerta }) {
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const { user } = useAuth();
-  const { setEstoque } = useData?.() || {};
+  const { setEstoque, addAtividade, addAlerta } = useData?.() || {};
   const [groq, setGroq] = useState(null);
 
   useEffect(() => {
@@ -90,11 +90,11 @@ export default function EstoqueBot({ addAlerta }) {
           type: 'object',
           properties: {
             nome: { type: 'string', description: 'Nome do produto (ex: Tela Moto G30 Vivid com Aro)' },
-            categoria: { type: 'string', description: 'Categoria (ex: peca, acessorio, insumo)' },
+            categoria: { type: 'string', description: 'Categoria (ex: peça, produto_venda, acessorio, insumo)' },
             quantidade: { type: 'integer', description: 'Quantidade a adicionar no estoque (padrão 1)' },
-            quantidade_minima: { type: 'integer', description: 'Quantidade mínima para alerta (padrão 0)' },
+            estoque_minimo: { type: 'integer', description: 'Quantidade mínima para alerta de estoque baixo (padrão 5)' },
             preco_custo: { type: 'number', description: 'Preço de custo unitário em reais' },
-            preco_venda: { type: 'number', description: 'Preço de venda à vista/PIX em reais (se não informado, será calculado)' },
+            preco_venda: { type: 'number', description: 'Preço de venda à vista/PIX em reais' },
             preco_credito: { type: 'number', description: 'Preço no cartão de crédito (+15%)' }
           },
           required: ['nome', 'preco_custo']
@@ -120,7 +120,7 @@ export default function EstoqueBot({ addAlerta }) {
       type: 'function',
       function: {
         name: 'gerar_lista_pedidos',
-        description: 'Analisa o estoque e retorna uma lista de todos os produtos cuja quantidade atual está abaixo ou igual à quantidade mínima (precisam ser comprados/repostos).',
+        description: 'Analisa o estoque e retorna uma lista de todos os produtos cuja quantidade atual está abaixo ou igual ao estoque mínimo.',
         parameters: {
           type: 'object',
           properties: {}
@@ -142,41 +142,54 @@ export default function EstoqueBot({ addAlerta }) {
         const venda = Number(args.preco_venda) || (custo > 0 ? custo * 1.6 : 0);
         const credito = Number(args.preco_credito) || (venda > 0 ? venda * 1.15 : 0);
         const qtd = args.quantidade !== undefined ? Number(args.quantidade) : 1;
+        const estMin = Number(args.estoque_minimo || args.quantidade_minima) || 5;
+
+        // Determinar categoria padrão inteligente
+        let categoria = args.categoria;
+        if (!categoria) {
+          const nomeLower = (args.nome || '').toLowerCase();
+          if (nomeLower.includes('tela') || nomeLower.includes('bateria') || nomeLower.includes('conector') || nomeLower.includes('flex') || nomeLower.includes('placa') || nomeLower.includes('camera') || nomeLower.includes('câmera')) {
+            categoria = 'peça';
+          } else {
+            categoria = 'produto_venda';
+          }
+        }
 
         const payload = {
           nome: args.nome,
-          categoria: args.categoria || 'peca',
+          categoria: categoria,
           quantidade: qtd,
-          quantidade_minima: Number(args.quantidade_minima) || 0,
+          estoque_minimo: estMin,
           preco_custo: custo,
           preco_venda: venda,
           preco_credito: credito
         };
-        const { data, error } = await supabase.from('estoque').insert([payload]).select();
-        if (error) throw error;
 
-        // Atualizar estado local de estoque se disponível
-        if (setEstoque && data && data[0]) {
-          setEstoque(prev => [data[0], ...(prev || [])]);
+        const { data, error } = await supabase.from('estoque').insert([payload]).select();
+        if (error) {
+          console.error('Erro ao inserir no estoque:', error);
+          throw error;
         }
 
-        // Registrar atividade
-        try {
-          await supabase.from('atividades').insert([{
-            tipo: 'adicao_estoque',
-            descricao: `[IA Assistente] Adicionou ${qtd}x ${args.nome} ao estoque.`,
-            id_usuario: user?.id,
-            valor: custo * qtd,
-            status: 'concluido'
-          }]);
-        } catch (e) {
-          console.warn('Erro ao registrar atividade do bot:', e);
+        const inserted = data[0];
+
+        // Atualizar estado local de estoque em tempo real
+        if (setEstoque && inserted) {
+          setEstoque(prev => [inserted, ...(prev || [])]);
+        }
+
+        // Registrar atividade e alerta
+        if (addAtividade) {
+          addAtividade('Novo Item no Estoque', `[IA Assistente] Cadastrou ${args.nome} (${qtd} un - Custo: R$ ${custo.toFixed(2)})`, 'estoque');
+        }
+        if (addAlerta) {
+          addAlerta(`"${args.nome}" adicionado ao estoque com sucesso!`, 'success');
         }
 
         return { 
           success: true, 
-          message: `Produto '${args.nome}' cadastrado com sucesso com ${qtd} unidade(s), Custo: R$ ${custo.toFixed(2)}, Venda PIX: R$ ${venda.toFixed(2)}, Crédito: R$ ${credito.toFixed(2)}.`, 
-          produto: data[0] 
+          message: `Produto '${args.nome}' cadastrado com sucesso! Quantidade: ${qtd}, Custo: R$ ${custo.toFixed(2)}, Preço PIX: R$ ${venda.toFixed(2)}, Cartão: R$ ${credito.toFixed(2)}.`, 
+          produto: inserted 
         };
       }
       case 'atualizar_estoque': {
@@ -186,28 +199,24 @@ export default function EstoqueBot({ addAlerta }) {
         const { data, error } = await supabase.from('estoque').update({ quantidade: args.nova_quantidade }).eq('id', args.id).select();
         if (error) throw error;
 
-        if (setEstoque && data && data[0]) {
-          setEstoque(prev => prev.map(item => item.id === args.id ? data[0] : item));
+        const updated = data[0];
+        if (setEstoque && updated) {
+          setEstoque(prev => prev.map(item => item.id === args.id ? updated : item));
         }
 
-        // Registrar atividade
-        try {
-          await supabase.from('atividades').insert([{
-            tipo: 'edicao_estoque',
-            descricao: `[IA Assistente] Alterou estoque de ${itemData.nome} de ${itemData.quantidade} para ${args.nova_quantidade}.`,
-            id_usuario: user?.id,
-            status: 'concluido'
-          }]);
-        } catch (e) {
-          console.warn('Erro ao registrar atividade do bot:', e);
+        if (addAtividade) {
+          addAtividade('Estoque Atualizado', `[IA Assistente] Alterou estoque de ${itemData.nome} de ${itemData.quantidade} para ${args.nova_quantidade}.`, 'estoque');
+        }
+        if (addAlerta) {
+          addAlerta(`Estoque de "${itemData.nome}" atualizado para ${args.nova_quantidade}!`, 'success');
         }
 
-        return { success: true, message: 'Estoque atualizado com sucesso', produto: data[0] };
+        return { success: true, message: `Estoque de '${itemData.nome}' atualizado para ${args.nova_quantidade}.`, produto: updated };
       }
       case 'gerar_lista_pedidos': {
         const { data: allData, error: errAll } = await supabase.from('estoque').select('*');
         if (errAll) throw errAll;
-        const faltantes = allData.filter(item => item.quantidade <= (item.quantidade_minima || 0));
+        const faltantes = allData.filter(item => item.quantidade <= (item.estoque_minimo || 0));
         return { total_items_precisando_reposicao: faltantes.length, itens: faltantes };
       }
       default:
@@ -259,7 +268,7 @@ export default function EstoqueBot({ addAlerta }) {
               tool_call_id: call.id,
               role: 'tool',
               name: call.function.name,
-              content: JSON.stringify({ error: error.message })
+              content: JSON.stringify({ error: error.message || 'Erro ao executar operação no banco.' })
             });
           }
         }
@@ -275,7 +284,6 @@ export default function EstoqueBot({ addAlerta }) {
         responseMessage = response.choices[0].message;
       }
 
-      // If content is present, append to messages
       setMessages(prev => [...currentMessages, responseMessage]);
 
     } catch (error) {
