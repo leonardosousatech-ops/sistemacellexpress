@@ -406,29 +406,11 @@ export default function Laboratorio() {
       <div
         key={os.id}
         draggable
+        className="kanban-card"
         onDragStart={(e) => handleDragStart(e, os.id)}
         onClick={() => handleOpenOS(os)}
         style={{
-          backgroundColor: 'var(--bg-elevated, #1a1a1a)',
-          borderRadius: '8px',
-          padding: '14px',
-          marginBottom: '12px',
-          border: '1px solid var(--border, #2a2a2a)',
-          borderLeft: `4px solid ${priorityColor}`,
-          cursor: 'grab',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
-          transition: 'transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease',
-          userSelect: 'none'
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'translateY(-2px)'
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.4)'
-          e.currentTarget.style.borderColor = 'var(--border-hover, #444)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'translateY(0)'
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.25)'
-          e.currentTarget.style.borderColor = 'var(--border, #2a2a2a)'
+          borderLeft: `4px solid ${priorityColor}`
         }}
       >
         {/* Card Header: ID, Priority, Date */}
@@ -618,18 +600,7 @@ export default function Laboratorio() {
 
       {/* Main Content: Kanban or Grid */}
       {viewMode === 'kanban' ? (
-        <div 
-          className="kanban-board-container"
-          style={{ 
-            marginTop: '20px', 
-            display: 'grid', 
-            gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', 
-            gap: '16px', 
-            overflowX: 'auto', 
-            paddingBottom: '20px',
-            alignItems: 'start'
-          }}
-        >
+        <div className="kanban-board-container">
           {KANBAN_COLUMNS.map(col => {
             const colItems = activeOS.filter(os => os.status === col.key)
             const isOver = dragOverColumn === col.key
@@ -638,30 +609,13 @@ export default function Laboratorio() {
             return (
               <div
                 key={col.key}
+                className={`kanban-column ${isOver ? 'drag-over' : ''}`}
                 onDragOver={(e) => handleDragOver(e, col.key)}
                 onDragLeave={(e) => handleDragLeave(e, col.key)}
                 onDrop={(e) => handleDrop(e, col.key)}
-                style={{
-                  backgroundColor: isOver ? 'rgba(255, 215, 0, 0.05)' : 'var(--card-bg, #141414)',
-                  borderRadius: '10px',
-                  border: isOver ? '2px dashed var(--accent-yellow, #FFD700)' : '1px solid var(--border, #2a2a2a)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  maxHeight: 'calc(100vh - 260px)',
-                  minHeight: '380px',
-                  transition: 'background-color 200ms ease, border-color 200ms ease',
-                  overflow: 'hidden'
-                }}
               >
                 {/* Column Header */}
-                <div style={{ 
-                  padding: '14px 16px', 
-                  borderBottom: '1px solid var(--border, #2a2a2a)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  backgroundColor: 'var(--bg-elevated, #1a1a1a)'
-                }}>
+                <div className="kanban-column-header">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{ 
                       width: '28px', 
@@ -692,13 +646,7 @@ export default function Laboratorio() {
                 </div>
 
                 {/* Column Body / Drop Zone */}
-                <div style={{ 
-                  padding: '12px', 
-                  overflowY: 'auto', 
-                  flex: 1, 
-                  display: 'flex', 
-                  flexDirection: 'column' 
-                }}>
+                <div className="kanban-column-body">
                   {colItems.map(os => renderOSCard(os))}
 
                   {colItems.length === 0 && (

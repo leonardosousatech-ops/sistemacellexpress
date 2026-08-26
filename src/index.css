@@ -1142,3 +1142,124 @@ table tr:hover td {
 .sidebar-overlay.active {
   display: block;
 }
+
+/* ===== KANBAN BOARD SYSTEM (RESPONSIVE 2X2 MOBILE) ===== */
+.kanban-board-container {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(260px, 1fr));
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 20px;
+  align-items: start;
+}
+
+.kanban-column {
+  background-color: var(--card-bg, #141414);
+  border-radius: 10px;
+  border: 1px solid var(--border, #2a2a2a);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 260px);
+  min-height: 380px;
+  transition: background-color 200ms ease, border-color 200ms ease;
+  overflow: hidden;
+}
+
+.kanban-column.drag-over {
+  background-color: rgba(255, 215, 0, 0.05);
+  border: 2px dashed var(--accent-yellow, #FFD700) !important;
+}
+
+.kanban-column-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border, #2a2a2a);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-elevated, #1a1a1a);
+}
+
+.kanban-column-body {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanban-card {
+  background-color: var(--bg-elevated, #1a1a1a);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border, #2a2a2a);
+  cursor: grab;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  user-select: none;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+  border-color: var(--border-hover, #444);
+}
+
+/* Mobile & Tablet 2x2 Layout */
+@media (max-width: 900px) {
+  .kanban-board-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+    gap: 12px;
+  }
+
+  .kanban-column {
+    min-height: 280px;
+    max-height: 480px;
+  }
+
+  /* 5th Column (Prontos) spans full width for balanced 2x2 grid */
+  .kanban-column:nth-child(5) {
+    grid-column: span 2;
+  }
+
+  .kanban-column-header {
+    padding: 10px 12px;
+  }
+
+  .kanban-column-body {
+    padding: 8px;
+  }
+
+  .kanban-card {
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kanban-board-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .kanban-column {
+    min-height: 240px;
+    max-height: 420px;
+  }
+
+  .kanban-column-header {
+    padding: 8px 10px;
+  }
+
+  .kanban-column-header span {
+    font-size: 0.8rem !important;
+  }
+
+  .kanban-card {
+    padding: 8px;
+    margin-bottom: 6px;
+  }
+}
+
