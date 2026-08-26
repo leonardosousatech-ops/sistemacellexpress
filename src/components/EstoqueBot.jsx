@@ -2,23 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bot, X, Send, Loader, ChevronDown } from 'lucide-react';
 import Groq from 'groq-sdk';
 import { supabase } from '../supabaseClient';
-import { useAuth } from '../App';
+import { useAuth, useData } from '../App';
 
 export default function EstoqueBot({ addAlerta }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
-    { role: 'system', content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda em português, de forma concisa e direta. Quando o usuário pedir para buscar, adicionar, alterar estoque ou listar pedidos, USE AS FERRAMENTAS ('tools') fornecidas. Nunca invente dados do estoque, apenas baseie-se nos resultados das ferramentas." },
+    { role: 'system', content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda em português, de forma concisa e direta. Quando o usuário pedir para buscar, adicionar, alterar estoque ou listar pedidos, USE AS FERRAMENTAS ('tools') fornecidas. Se o usuário passar apenas um valor ao adicionar um produto (ex: 'tela moto g30 100'), considere esse valor como o preço de custo. Nunca invente dados do estoque, apenas baseie-se nos resultados das ferramentas." },
     { role: 'assistant', content: 'Olá! Sou seu Assistente IA de Estoque. Posso pesquisar produtos, adicionar novos, alterar quantidades ou gerar listas de pedidos. Como posso ajudar?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
   const { user } = useAuth();
+  const { setEstoque } = useData?.() || {};
   const [groq, setGroq] = useState(null);
 
   useEffect(() => {
     // Initialize Groq AI client
-    // user said they added groq api key to project, probably VITE_GROQ_API_KEY
     const apiKey = import.meta.env.VITE_GROQ_API_KEY || import.meta.env.VITE_GEMINI_API_KEY; 
     if (apiKey) {
       setGroq(new Groq({ apiKey, dangerouslyAllowBrowser: true }));
@@ -32,6 +32,25 @@ export default function EstoqueBot({ addAlerta }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isOpen]);
+
+  // Helper to call Groq with model fallback
+  const createChatCompletionWithFallback = async (groqClient, payload) => {
+    const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.1-70b-versatile', 'mixtral-8x7b-32768'];
+    let lastError = null;
+
+    for (const model of models) {
+      try {
+        return await groqClient.chat.completions.create({
+          ...payload,
+          model
+        });
+      } catch (err) {
+        console.warn(`Groq request failed with model ${model}, trying fallback...`, err);
+        lastError = err;
+      }
+    }
+    throw lastError;
+  };
 
   // Define tools for the AI (OpenAI format)
   const tools = [
@@ -53,18 +72,19 @@ export default function EstoqueBot({ addAlerta }) {
       type: 'function',
       function: {
         name: 'adicionar_produto',
-        description: 'Cria/Adiciona um novo produto ao banco de dados de estoque.',
+        description: 'Cria e cadastra um novo produto no banco de dados de estoque.',
         parameters: {
           type: 'object',
           properties: {
-            nome: { type: 'string', description: 'Nome do produto' },
+            nome: { type: 'string', description: 'Nome do produto (ex: Tela Moto G30 Vivid com Aro)' },
             categoria: { type: 'string', description: 'Categoria (ex: peca, acessorio, insumo)' },
-            quantidade: { type: 'integer', description: 'Quantidade atual em estoque' },
-            quantidade_minima: { type: 'integer', description: 'Quantidade mínima ideal para o estoque' },
+            quantidade: { type: 'integer', description: 'Quantidade a adicionar no estoque (padrão 1)' },
+            quantidade_minima: { type: 'integer', description: 'Quantidade mínima para alerta (padrão 0)' },
             preco_custo: { type: 'number', description: 'Preço de custo unitário em reais' },
-            preco_venda: { type: 'number', description: 'Preço de venda sugerido em reais' }
+            preco_venda: { type: 'number', description: 'Preço de venda à vista/PIX em reais (se não informado, será calculado)' },
+            preco_credito: { type: 'number', description: 'Preço no cartão de crédito (+15%)' }
           },
-          required: ['nome', 'quantidade', 'preco_custo']
+          required: ['nome', 'preco_custo']
         }
       }
     },
@@ -105,27 +125,46 @@ export default function EstoqueBot({ addAlerta }) {
         return data;
       }
       case 'adicionar_produto': {
+        const custo = Number(args.preco_custo) || 0;
+        const venda = Number(args.preco_venda) || (custo > 0 ? custo * 1.6 : 0);
+        const credito = Number(args.preco_credito) || (venda > 0 ? venda * 1.15 : 0);
+        const qtd = args.quantidade !== undefined ? Number(args.quantidade) : 1;
+
         const payload = {
           nome: args.nome,
           categoria: args.categoria || 'peca',
-          quantidade: args.quantidade,
-          quantidade_minima: args.quantidade_minima || 0,
-          preco_custo: args.preco_custo,
-          preco_venda: args.preco_venda || (args.preco_custo * 2)
+          quantidade: qtd,
+          quantidade_minima: Number(args.quantidade_minima) || 0,
+          preco_custo: custo,
+          preco_venda: venda,
+          preco_credito: credito
         };
         const { data, error } = await supabase.from('estoque').insert([payload]).select();
         if (error) throw error;
 
-        // Registrar atividade
-        await supabase.from('atividades').insert([{
-          tipo: 'adicao_estoque',
-          descricao: `[IA Assistente] Adicionou ${args.quantidade}x ${args.nome} ao estoque.`,
-          id_usuario: user?.id,
-          valor: args.preco_custo * args.quantidade,
-          status: 'concluido'
-        }]);
+        // Atualizar estado local de estoque se disponível
+        if (setEstoque && data && data[0]) {
+          setEstoque(prev => [data[0], ...(prev || [])]);
+        }
 
-        return { success: true, message: 'Produto adicionado com sucesso', produto: data[0] };
+        // Registrar atividade
+        try {
+          await supabase.from('atividades').insert([{
+            tipo: 'adicao_estoque',
+            descricao: `[IA Assistente] Adicionou ${qtd}x ${args.nome} ao estoque.`,
+            id_usuario: user?.id,
+            valor: custo * qtd,
+            status: 'concluido'
+          }]);
+        } catch (e) {
+          console.warn('Erro ao registrar atividade do bot:', e);
+        }
+
+        return { 
+          success: true, 
+          message: 'Produto adicionado com sucesso', 
+          produto: data[0] 
+        };
       }
       case 'atualizar_estoque': {
         const { data: itemData, error: findError } = await supabase.from('estoque').select('*').eq('id', args.id).single();
@@ -134,13 +173,21 @@ export default function EstoqueBot({ addAlerta }) {
         const { data, error } = await supabase.from('estoque').update({ quantidade: args.nova_quantidade }).eq('id', args.id).select();
         if (error) throw error;
 
+        if (setEstoque && data && data[0]) {
+          setEstoque(prev => prev.map(item => item.id === args.id ? data[0] : item));
+        }
+
         // Registrar atividade
-        await supabase.from('atividades').insert([{
-          tipo: 'edicao_estoque',
-          descricao: `[IA Assistente] Alterou estoque de ${itemData.nome} de ${itemData.quantidade} para ${args.nova_quantidade}.`,
-          id_usuario: user?.id,
-          status: 'concluido'
-        }]);
+        try {
+          await supabase.from('atividades').insert([{
+            tipo: 'edicao_estoque',
+            descricao: `[IA Assistente] Alterou estoque de ${itemData.nome} de ${itemData.quantidade} para ${args.nova_quantidade}.`,
+            id_usuario: user?.id,
+            status: 'concluido'
+          }]);
+        } catch (e) {
+          console.warn('Erro ao registrar atividade do bot:', e);
+        }
 
         return { success: true, message: 'Estoque atualizado com sucesso', produto: data[0] };
       }
@@ -157,7 +204,7 @@ export default function EstoqueBot({ addAlerta }) {
 
   const handleSendMessage = async () => {
     if (!input.trim() || !groq) {
-      if (!groq && addAlerta) addAlerta('A chave da API Groq (VITE_GROQ_API_KEY) não está configurada no arquivo .env.', 'error');
+      if (!groq && addAlerta) addAlerta('A chave da API Groq (VITE_GROQ_API_KEY) não está configurada no ambiente.', 'error');
       return;
     }
 
@@ -171,8 +218,7 @@ export default function EstoqueBot({ addAlerta }) {
     try {
       let currentMessages = [...newMessages];
       
-      let response = await groq.chat.completions.create({
-        model: 'llama3-70b-8192',
+      let response = await createChatCompletionWithFallback(groq, {
         messages: currentMessages,
         tools: tools,
         tool_choice: 'auto',
@@ -206,8 +252,7 @@ export default function EstoqueBot({ addAlerta }) {
         }
         
         // Get the final response from Groq after tool results
-        response = await groq.chat.completions.create({
-          model: 'llama3-70b-8192',
+        response = await createChatCompletionWithFallback(groq, {
           messages: currentMessages,
           tools: tools,
           tool_choice: 'auto',
@@ -220,8 +265,11 @@ export default function EstoqueBot({ addAlerta }) {
       setMessages(prev => [...currentMessages, responseMessage]);
 
     } catch (error) {
-      console.error("Chat erro:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "Desculpe, ocorreu um erro ao se comunicar com a IA da Groq." }]);
+      console.error("Chat erro Groq:", error);
+      const errMsg = error?.message?.includes('Rate limit') 
+        ? "Limite temporário de requisições atingido. Por favor, aguarde alguns segundos."
+        : "Desculpe, ocorreu um erro ao se comunicar com a IA da Groq. Verifique a chave de API.";
+      setMessages(prev => [...prev, { role: 'assistant', content: errMsg }]);
     } finally {
       setIsLoading(false);
     }
@@ -292,8 +340,8 @@ export default function EstoqueBot({ addAlerta }) {
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: '15px', color: '#fff' }}>Assistente de Estoque</h3>
-                <span style={{ fontSize: '11px', color: 'var(--accent-color)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-color)' }}></span> Online (Groq)
+                <span style={{ fontSize: '11px', color: 'var(--accent-color, #FFD700)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'var(--accent-color, #FFD700)' }}></span> Online (Groq)
                 </span>
               </div>
             </div>
@@ -350,7 +398,7 @@ export default function EstoqueBot({ addAlerta }) {
                 <div style={{ width: '30px', height: '30px', borderRadius: '50%', backgroundColor: 'rgba(255,215,0,0.1)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                   <Bot size={16} color="var(--accent-color, #FFD700)" />
                 </div>
-                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 4px', backgroundColor: '#2a2a2a', color: 'var(--text-secondary)' }}>
+                <div style={{ padding: '12px 16px', borderRadius: '16px 16px 16px 4px', backgroundColor: '#2a2a2a', color: 'var(--text-secondary, #A0A0A0)' }}>
                   <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} />
                 </div>
               </div>
@@ -382,7 +430,7 @@ export default function EstoqueBot({ addAlerta }) {
                   fontSize: '14px',
                   transition: 'border-color 0.2s'
                 }}
-                onFocus={e => e.target.style.borderColor = 'var(--accent-color)'}
+                onFocus={e => e.target.style.borderColor = 'var(--accent-color, #FFD700)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border-color, #333)'}
               />
               <button
