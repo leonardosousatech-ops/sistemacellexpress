@@ -316,7 +316,11 @@ export default function Estoque() {
               let marca = "";
 
               const lowerNome = parsedNome.toLowerCase();
-              const marcas = ["genuína", "genuina", "soft oled", "oled", "jk", "incell", "original", "premium", "prime", "hx", "gx"];
+              const marcas = [
+                "vivid com aro", "vivid sem aro", "vivid",
+                "com aro", "sem aro", "original nacional", "nacional", "importada",
+                "genuína", "genuina", "soft oled", "hard oled", "oled", "jk", "incell", "original", "premium", "prime", "hx", "gx"
+              ];
               for (const m of marcas) {
                 if (lowerNome.endsWith(m)) {
                   marca = parsedNome.substring(parsedNome.length - m.length);
@@ -325,7 +329,7 @@ export default function Estoque() {
                 }
               }
 
-              const produtos = ["bateria", "tela", "display", "conector", "câmera", "camera", "vidro", "tampa traseira", "tampa", "carcaça"];
+              const produtos = ["bateria", "tela", "display", "conector de carga", "conector", "câmera frontal", "câmera traseira", "câmera", "camera", "vidro", "tampa traseira", "tampa", "carcaça", "flex"];
               const lowerNome2 = parsedNome.toLowerCase();
               for (const p of produtos) {
                 if (lowerNome2.startsWith(p)) {
@@ -342,6 +346,7 @@ export default function Estoque() {
               
               const isBaixo = item.quantidade <= item.estoque_minimo;
               const isCritico = item.quantidade === 0;
+              const isPeca = item.categoria === 'peça' || item.categoria === 'peca';
 
               return (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border, #2a2a2a)' }}>
@@ -360,22 +365,24 @@ export default function Estoque() {
                     {modelo}
                   </td>
                   <td data-label="Marca" style={{ padding: '15px' }}>
-                    {marca !== '-' && marca !== '' ? (
+                    {marca ? (
                       <span style={{
                         padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem',
                         backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#fff'
                       }}>
                         {marca}
                       </span>
-                    ) : '-'}
+                    ) : (
+                      <span style={{ color: 'var(--text-muted, #666)' }}>-</span>
+                    )}
                   </td>
                   <td data-label="Categoria" style={{ padding: '15px' }}>
                     <span className="status-badge" style={{ 
                       padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem',
-                      backgroundColor: item.categoria === 'peça' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(37, 211, 102, 0.2)',
-                      color: item.categoria === 'peça' ? 'var(--info, #3B82F6)' : 'var(--success, #25D366)'
+                      backgroundColor: isPeca ? 'rgba(59, 130, 246, 0.2)' : 'rgba(37, 211, 102, 0.2)',
+                      color: isPeca ? 'var(--info, #3B82F6)' : 'var(--success, #25D366)'
                     }}>
-                      {item.categoria === 'peça' ? 'Peça' : 'Produto'}
+                      {isPeca ? 'Peça' : 'Produto'}
                     </span>
                   </td>
                   <td data-label="Quantidade" style={{ 
