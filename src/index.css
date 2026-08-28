@@ -1116,13 +1116,53 @@ table tr:hover td {
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .kpi-card {
+    padding: 10px 12px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: auto !important;
+  }
+
+  .kpi-card .kpi-icon {
+    width: 32px !important;
+    height: 32px !important;
+    margin-bottom: 0 !important;
+    flex-shrink: 0 !important;
+  }
+
+  .kpi-card .kpi-label {
+    font-size: 0.72rem !important;
+    margin-bottom: 2px !important;
+    line-height: 1.1 !important;
   }
 
   .kpi-card .kpi-value {
-    font-size: 1.4rem;
+    font-size: 1.15rem !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 6px !important;
+  }
+
+  .kpi-card {
+    padding: 8px 10px !important;
+  }
+
+  .kpi-card .kpi-value {
+    font-size: 1.1rem !important;
   }
 
   .topbar-title h2 {
@@ -1143,7 +1183,7 @@ table tr:hover td {
   display: block;
 }
 
-/* ===== KANBAN BOARD SYSTEM (RESPONSIVE 2X2 MOBILE) ===== */
+/* ===== KANBAN BOARD SYSTEM (RESPONSIVE 2X2 & 1-COLUMN SECTION MOBILE) ===== */
 .kanban-board-container {
   margin-top: 20px;
   display: grid;
@@ -1206,20 +1246,67 @@ table tr:hover td {
   border-color: var(--border-hover, #444);
 }
 
-/* Mobile & Tablet 2x2 Layout */
+/* ===== 1-COLUMN SECTION VIEW (ESTILO IMAGE 1) ===== */
+.kanban-sections-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.kanban-section-group {
+  background-color: var(--card-bg, #141414);
+  border-radius: 12px;
+  border: 1px solid var(--border, #2a2a2a);
+  overflow: hidden;
+}
+
+.kanban-section-header {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.kanban-section-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kanban-row-card {
+  background-color: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+.kanban-row-card:hover {
+  border-color: var(--accent-yellow, #FFD700);
+  transform: translateY(-1px);
+}
+
+/* Mobile 2x2 Layout */
 @media (max-width: 900px) {
   .kanban-board-container {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     overflow-x: visible;
-    gap: 12px;
+    gap: 10px;
   }
 
   .kanban-column {
-    min-height: 280px;
-    max-height: 480px;
+    min-height: 260px;
+    max-height: 460px;
   }
 
-  /* 5th Column (Prontos) spans full width for balanced 2x2 grid */
   .kanban-column:nth-child(5) {
     grid-column: span 2;
   }
@@ -1245,8 +1332,8 @@ table tr:hover td {
   }
 
   .kanban-column {
-    min-height: 240px;
-    max-height: 420px;
+    min-height: 220px;
+    max-height: 400px;
   }
 
   .kanban-column-header {
@@ -1262,4 +1349,5 @@ table tr:hover td {
     margin-bottom: 6px;
   }
 }
+
 

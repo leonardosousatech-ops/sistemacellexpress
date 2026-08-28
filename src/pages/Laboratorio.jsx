@@ -5,7 +5,7 @@ import DamageMap from '../components/DamageMap'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
   Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2,
-  Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers
+  Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers, Rows3, Columns3, Check
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -18,11 +18,11 @@ const STATUS_LABELS = {
 }
 
 const KANBAN_COLUMNS = [
-  { key: 'na-fila', label: 'Na Fila', color: '#3B82F6', icon: Clock, bg: 'rgba(59, 130, 246, 0.1)' },
-  { key: 'em-analise', label: 'Em Análise', color: '#FFAA00', icon: Search, bg: 'rgba(255, 170, 0, 0.1)' },
-  { key: 'aguardando-peca', label: 'Aguardando Peça', color: '#FF4444', icon: AlertCircle, bg: 'rgba(255, 68, 68, 0.1)' },
-  { key: 'em-reparo', label: 'Em Reparo', color: '#A855F7', icon: Wrench, bg: 'rgba(168, 85, 247, 0.1)' },
-  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.1)' }
+  { key: 'na-fila', label: 'Na Fila', color: '#3B82F6', icon: Clock, bg: 'rgba(59, 130, 246, 0.12)', border: 'rgba(59, 130, 246, 0.3)' },
+  { key: 'em-analise', label: 'Em Análise', color: '#FFAA00', icon: Search, bg: 'rgba(255, 170, 0, 0.12)', border: 'rgba(255, 170, 0, 0.3)' },
+  { key: 'aguardando-peca', label: 'Aguardando Peça', color: '#FF4444', icon: AlertCircle, bg: 'rgba(255, 68, 68, 0.12)', border: 'rgba(255, 68, 68, 0.3)' },
+  { key: 'em-reparo', label: 'Em Reparo', color: '#A855F7', icon: Wrench, bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.3)' },
+  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.12)', border: 'rgba(37, 211, 102, 0.3)' }
 ]
 
 const NEXT_STATUS = {
@@ -38,7 +38,8 @@ export default function Laboratorio() {
   const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta, setFinanceiro } = useData()
   const { user } = useAuth()
 
-  const [viewMode, setViewMode] = useState('kanban') // 'kanban' | 'grid'
+  // viewMode: 'sections' (1 Coluna em seções verticais - estilo Image 1) | 'kanban' (Grade 2x2 no celular / colunas) | 'grid' (Abas/Grade)
+  const [viewMode, setViewMode] = useState('sections')
   const [filterTab, setFilterTab] = useState('todos')
   const [searchTerm, setSearchTerm] = useState('')
   const [draggedOSId, setDraggedOSId] = useState(null)
@@ -507,43 +508,171 @@ export default function Laboratorio() {
     )
   }
 
+  // Render Horizontal Section Card (Estilo Image 1)
+  const renderSectionCard = (os) => {
+    const isHeating = checkNeedsHeatByModel(os.modelo)
+    const priorityColor = os.prioridade === 'urgente' 
+      ? 'var(--danger, #FF4444)' 
+      : os.prioridade === 'alta' 
+      ? 'var(--warning, #FFAA00)' 
+      : os.prioridade === 'normal' 
+      ? 'var(--info, #3B82F6)' 
+      : 'var(--border, #444)'
+
+    const entryDate = os.data_entrada 
+      ? new Date(os.data_entrada).toISOString().split('T')[0] 
+      : today
+
+    return (
+      <div
+        key={os.id}
+        className="kanban-row-card"
+        onClick={() => handleOpenOS(os)}
+        style={{
+          borderLeft: `4px solid ${priorityColor}`
+        }}
+      >
+        {/* Top Header: #ID and Date */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: '800', color: 'var(--text-secondary, #A0A0A0)', fontSize: '0.85rem' }}>
+            #{os.id}
+          </span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted, #777)' }}>
+            {entryDate}
+          </span>
+        </div>
+
+        {/* Customer & Device */}
+        <div>
+          <div style={{ fontWeight: '700', fontSize: '0.95rem', color: 'var(--text-primary, #fff)' }}>
+            {getClientName(os.id_cliente)}
+          </div>
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary, #A0A0A0)', marginTop: '2px' }}>
+            {os.tipo_aparelho} • {os.modelo}
+          </div>
+        </div>
+
+        {/* Problem */}
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted, #888)', lineHeight: '1.3' }}>
+          {os.problema}
+        </div>
+
+        {/* Bottom row: Value and Action Button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {os.valor ? (
+              <span style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--accent-yellow, #FFD700)' }}>
+                R$ {os.valor.toFixed(2)}
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted, #666)' }}>Sem valor</span>
+            )}
+            {isHeating && (
+              <span title="Requer Separadora Térmica" style={{ color: 'var(--danger, #FF4444)' }}>
+                <Flame size={14} />
+              </span>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {NEXT_STATUS[os.status] && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleUpdateStatus(NEXT_STATUS[os.status], os)
+                }}
+                style={{
+                  backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                  color: 'var(--info, #3B82F6)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                Avançar <ArrowRight size={12} />
+              </button>
+            )}
+
+            {os.status === 'pronto' && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleOpenOS(os)
+                }}
+                style={{
+                  backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                  color: 'var(--success, #25D366)',
+                  border: '1px solid rgba(37, 211, 102, 0.4)',
+                  padding: '5px 12px',
+                  borderRadius: '6px',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                <Check size={12} /> Entregar / Pagar
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div>
-      {/* KPIs */}
+      {/* KPIs (Compact on mobile) */}
       <div className="kpi-grid">
         <div className="kpi-card">
-          <div className="kpi-icon blue"><Clock size={20} /></div>
-          <div className="kpi-label">Na Fila</div>
-          <div className="kpi-value">{kpis.naFila}</div>
+          <div className="kpi-icon blue"><Clock size={18} /></div>
+          <div>
+            <div className="kpi-label">Na Fila</div>
+            <div className="kpi-value">{kpis.naFila}</div>
+          </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon yellow"><Wrench size={20} /></div>
-          <div className="kpi-label">Em Andamento</div>
-          <div className="kpi-value">{kpis.emAndamento}</div>
+          <div className="kpi-icon yellow"><Wrench size={18} /></div>
+          <div>
+            <div className="kpi-label">Em Andamento</div>
+            <div className="kpi-value">{kpis.emAndamento}</div>
+          </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon red"><AlertCircle size={20} /></div>
-          <div className="kpi-label">Aguardando Peça</div>
-          <div className="kpi-value">{kpis.aguardando}</div>
+          <div className="kpi-icon red"><AlertCircle size={18} /></div>
+          <div>
+            <div className="kpi-label">Aguardando Peça</div>
+            <div className="kpi-value">{kpis.aguardando}</div>
+          </div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-icon green"><CheckCircle size={20} /></div>
-          <div className="kpi-label">Concluídas Hoje</div>
-          <div className="kpi-value">{kpis.concluidasHoje}</div>
+          <div className="kpi-icon green"><CheckCircle size={18} /></div>
+          <div>
+            <div className="kpi-label">Concluídas Hoje</div>
+            <div className="kpi-value">{kpis.concluidasHoje}</div>
+          </div>
         </div>
       </div>
 
-      {/* Control Bar: Search & View Switch */}
-      <div className="card" style={{ marginTop: '24px', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '1', minWidth: '240px', maxWidth: '400px' }}>
-          <Search size={18} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+      {/* Control Bar: Search & 3-Button View Switcher (Estilo Image 1) */}
+      <div className="card" style={{ marginTop: '16px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '400px' }}>
+          <Search size={16} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             className="form-input"
-            placeholder="Buscar por OS, cliente, modelo ou problema..."
+            placeholder="Buscar OS, cliente ou modelo..."
             value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)}
-            style={{ paddingLeft: '38px', width: '100%', backgroundColor: 'var(--bg-primary, #0a0a0a)' }}
+            style={{ paddingLeft: '36px', width: '100%', backgroundColor: 'var(--bg-primary, #0a0a0a)', fontSize: '0.85rem' }}
           />
           {searchTerm && (
             <button 
@@ -555,51 +684,112 @@ export default function Laboratorio() {
           )}
         </div>
 
-        {/* View mode toggle button */}
-        <div style={{ display: 'flex', background: 'var(--bg-primary, #0a0a0a)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border, #2a2a2a)' }}>
+        {/* 3 View Mode Toggle Buttons (Estilo Image 1) */}
+        <div style={{ display: 'flex', background: 'var(--bg-primary, #0a0a0a)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border, #2a2a2a)', gap: '2px' }}>
           <button
-            onClick={() => setViewMode('kanban')}
+            onClick={() => setViewMode('sections')}
+            title="Visualização 1 Coluna em Seções (Ideal para Celular)"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
+              justifyContent: 'center',
+              padding: '6px 10px',
+              borderRadius: '6px',
+              border: 'none',
+              background: viewMode === 'sections' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+              color: viewMode === 'sections' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+              cursor: 'pointer',
+              transition: 'all 150ms ease'
+            }}
+          >
+            <Rows3 size={18} />
+          </button>
+          <button
+            onClick={() => setViewMode('kanban')}
+            title="Quadro Kanban (Grade 2x2 no Celular / Colunas no PC)"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '6px 10px',
               borderRadius: '6px',
               border: 'none',
               background: viewMode === 'kanban' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
               color: viewMode === 'kanban' ? '#000' : 'var(--text-secondary, #A0A0A0)',
-              fontWeight: viewMode === 'kanban' ? '700' : '500',
               cursor: 'pointer',
-              fontSize: '13px',
               transition: 'all 150ms ease'
             }}
           >
-            <Kanban size={16} /> Kanban
+            <LayoutGrid size={18} />
           </button>
           <button
             onClick={() => setViewMode('grid')}
+            title="Visualização Tradicional por Abas"
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
+              justifyContent: 'center',
+              padding: '6px 10px',
               borderRadius: '6px',
               border: 'none',
               background: viewMode === 'grid' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
               color: viewMode === 'grid' ? '#000' : 'var(--text-secondary, #A0A0A0)',
-              fontWeight: viewMode === 'grid' ? '700' : '500',
               cursor: 'pointer',
-              fontSize: '13px',
               transition: 'all 150ms ease'
             }}
           >
-            <LayoutGrid size={16} /> Grade
+            <Columns3 size={18} />
           </button>
         </div>
       </div>
 
-      {/* Main Content: Kanban or Grid */}
-      {viewMode === 'kanban' ? (
+      {/* Main Content: 1-Column Sections View (Image 1 Style) */}
+      {viewMode === 'sections' && (
+        <div className="kanban-sections-wrapper">
+          {KANBAN_COLUMNS.map(col => {
+            const colItems = activeOS.filter(os => os.status === col.key)
+            const Icon = col.icon
+
+            return (
+              <div 
+                key={col.key} 
+                className="kanban-section-group"
+                style={{
+                  borderTop: `3px solid ${col.color}`
+                }}
+              >
+                {/* Section Header */}
+                <div 
+                  className="kanban-section-header"
+                  style={{
+                    backgroundColor: col.bg,
+                    borderBottom: '1px solid rgba(255,255,255,0.06)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: col.color }}>
+                    <Icon size={18} />
+                    <span>{col.label} ({colItems.length})</span>
+                  </div>
+                </div>
+
+                {/* Section Body */}
+                <div className="kanban-section-body">
+                  {colItems.map(os => renderSectionCard(os))}
+
+                  {colItems.length === 0 && (
+                    <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted, #666)', fontSize: '0.82rem' }}>
+                      Nenhuma OS neste status.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Main Content: 2x2 Kanban Board */}
+      {viewMode === 'kanban' && (
         <div className="kanban-board-container">
           {KANBAN_COLUMNS.map(col => {
             const colItems = activeOS.filter(os => os.status === col.key)
@@ -672,8 +862,10 @@ export default function Laboratorio() {
             )
           })}
         </div>
-      ) : (
-        /* Traditional Filtered Grid View */
+      )}
+
+      {/* Main Content: Traditional Filtered Grid View */}
+      {viewMode === 'grid' && (
         <div className="card" style={{ marginTop: '20px' }}>
           <div className="tabs">
             {tabs.map(t => (
@@ -859,7 +1051,7 @@ export default function Laboratorio() {
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                     <select className="form-select" value={pecaSelecionada} onChange={e => setPecaSelecionada(e.target.value)} style={{ flex: 1, minWidth: '200px' }}>
                       <option value="">Selecionar peça...</option>
-                      {estoque.filter(e => e.categoria === 'peca' && e.quantidade > 0).map(e => (
+                      {estoque.filter(e => (e.categoria === 'peca' || e.categoria === 'peça') && e.quantidade > 0).map(e => (
                         <option key={e.id} value={e.id}>{e.nome} (Estoque: {e.quantidade})</option>
                       ))}
                     </select>
