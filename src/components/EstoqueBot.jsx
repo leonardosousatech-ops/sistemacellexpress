@@ -9,12 +9,14 @@ export default function EstoqueBot() {
   const [messages, setMessages] = useState([
     { 
       role: 'system', 
-      content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda sempre em português, de forma amigável, clara e concisa.\n" +
-               "Quando o usuário pedir para cadastrar, acrescentar, adicionar, buscar ou alterar produtos, USE AS FERRAMENTAS ('tools') fornecidas.\n" +
-               "Se o usuário escrever algo como 'acrescenta tela moto g 30 vivid com aro 100', entenda 'tela moto g 30 vivid com aro' como o nome do produto e '100' como o preço de custo (ou 1 unidade caso não tenha especificado).\n" +
-               "Ao adicionar um produto com sucesso, dê uma resposta curta e confirme o nome, quantidade e valores calculados."
+      content: "Você é o Assistente Virtual do Estoque da Cell Express. Responda sempre em português, de forma amigável, clara e concisa.\n\n" +
+               "REGRAS CRÍTICAS DE FERRAMENTAS:\n" +
+               "1. CORREÇÃO / EDIÇÃO / ATUALIZAÇÃO: Se o usuário pedir para corrigir, editar, alterar, mudar dados, ajustar preço ou quantidade de um produto (ex: 'corrige o preço da tela moto g30 para 120', 'edita o produto tal', 'troca o nome'), NUNCA crie um novo item com adicionar_produto. USE SEMPRE a ferramenta 'editar_produto' ou 'atualizar_estoque'.\n" +
+               "2. EXCLUSÃO: Se o usuário pedir para apagar, remover ou excluir um produto, use a ferramenta 'excluir_produto'.\n" +
+               "3. CADASTRO NOVO: Só use 'adicionar_produto' quando for uma inclusão de produto novo que não existe no estoque.\n" +
+               "4. BUSCA: Use 'buscar_produto' para consultar itens e verificar detalhes."
     },
-    { role: 'assistant', content: 'Olá! Sou seu Assistente IA de Estoque. Posso pesquisar produtos, adicionar novos, alterar quantidades ou gerar listas de pedidos. Como posso ajudar?' }
+    { role: 'assistant', content: 'Olá! Sou seu Assistente IA de Estoque. Posso pesquisar produtos, adicionar novos, corrigir ou editar cadastros existentes, alterar quantidades ou apagar itens. Como posso ajudar?' }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -85,7 +87,7 @@ export default function EstoqueBot() {
       type: 'function',
       function: {
         name: 'adicionar_produto',
-        description: 'Cria e cadastra um novo produto no banco de dados de estoque da loja.',
+        description: 'Cria e cadastra um NOVO produto no banco de dados de estoque da loja.',
         parameters: {
           type: 'object',
           properties: {
@@ -104,15 +106,51 @@ export default function EstoqueBot() {
     {
       type: 'function',
       function: {
+        name: 'editar_produto',
+        description: 'Edita/Corrige os dados de um produto já cadastrado (nome, preço de custo, preço de venda, preço de crédito, quantidade, categoria ou estoque mínimo).',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', description: 'ID numérico do produto (se conhecido)' },
+            termo_busca: { type: 'string', description: 'Nome ou parte do nome do produto a ser editado/corrigido' },
+            novo_nome: { type: 'string', description: 'Novo nome corrigido do produto' },
+            novo_preco_custo: { type: 'number', description: 'Novo preço de custo em reais' },
+            novo_preco_venda: { type: 'number', description: 'Novo preço de venda PIX em reais' },
+            novo_preco_credito: { type: 'number', description: 'Novo preço no cartão de crédito (+15%)' },
+            nova_quantidade: { type: 'integer', description: 'Nova quantidade em estoque' },
+            novo_estoque_minimo: { type: 'integer', description: 'Novo estoque mínimo' },
+            nova_categoria: { type: 'string', description: 'Nova categoria' }
+          }
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
         name: 'atualizar_estoque',
-        description: 'Atualiza (edita) a quantidade em estoque de um produto existente.',
+        description: 'Atualiza (edita) especificamente a quantidade em estoque de um produto existente.',
         parameters: {
           type: 'object',
           properties: {
             id: { type: 'integer', description: 'ID numérico do produto' },
+            termo_busca: { type: 'string', description: 'Nome do produto caso o ID não seja fornecido' },
             nova_quantidade: { type: 'integer', description: 'Nova quantidade total em estoque' }
           },
-          required: ['id', 'nova_quantidade']
+          required: ['nova_quantidade']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'excluir_produto',
+        description: 'Exclui/Apaga permanentemente um produto do estoque.',
+        parameters: {
+          type: 'object',
+          properties: {
+            id: { type: 'integer', description: 'ID numérico do produto a excluir' },
+            termo_busca: { type: 'string', description: 'Nome ou parte do nome do produto a excluir' }
+          }
         }
       }
     },
@@ -137,6 +175,7 @@ export default function EstoqueBot() {
         if (error) throw error;
         return data;
       }
+
       case 'adicionar_produto': {
         const custo = Number(args.preco_custo) || 0;
         const venda = Number(args.preco_venda) || (custo > 0 ? custo * 1.6 : 0);
@@ -160,6 +199,7 @@ export default function EstoqueBot() {
           categoria: categoria,
           quantidade: qtd,
           estoque_minimo: estMin,
+          quantidade_minima: estMin,
           preco_custo: custo,
           preco_venda: venda,
           preco_credito: credito
@@ -192,33 +232,137 @@ export default function EstoqueBot() {
           produto: inserted 
         };
       }
-      case 'atualizar_estoque': {
-        const { data: itemData, error: findError } = await supabase.from('estoque').select('*').eq('id', args.id).single();
-        if (findError) throw findError;
 
-        const { data, error } = await supabase.from('estoque').update({ quantidade: args.nova_quantidade }).eq('id', args.id).select();
+      case 'editar_produto': {
+        // Localizar produto por ID ou Termo de Busca
+        let targetItem = null;
+        if (args.id) {
+          const { data } = await supabase.from('estoque').select('*').eq('id', args.id).single();
+          targetItem = data;
+        } else if (args.termo_busca) {
+          const { data } = await supabase.from('estoque').select('*').ilike('nome', `%${args.termo_busca}%`).limit(1);
+          if (data && data.length > 0) targetItem = data[0];
+        }
+
+        if (!targetItem) {
+          return { error: `Produto não encontrado para edição com os dados fornecidos ('${args.termo_busca || args.id}'). Tente informar o nome exato ou ID.` };
+        }
+
+        const updates = {};
+        if (args.novo_nome) updates.nome = args.novo_nome;
+        if (args.nova_categoria) updates.categoria = args.nova_categoria;
+        if (args.nova_quantidade !== undefined) updates.quantidade = Number(args.nova_quantidade);
+        if (args.novo_estoque_minimo !== undefined) {
+          updates.estoque_minimo = Number(args.novo_estoque_minimo);
+          updates.quantidade_minima = Number(args.novo_estoque_minimo);
+        }
+        if (args.novo_preco_custo !== undefined) {
+          updates.preco_custo = Number(args.novo_preco_custo);
+          if (args.novo_preco_venda === undefined) {
+            updates.preco_venda = updates.preco_custo * 1.6;
+          }
+        }
+        if (args.novo_preco_venda !== undefined) {
+          updates.preco_venda = Number(args.novo_preco_venda);
+        }
+        if (args.novo_preco_credito !== undefined) {
+          updates.preco_credito = Number(args.novo_preco_credito);
+        } else if (updates.preco_venda !== undefined) {
+          updates.preco_credito = updates.preco_venda * 1.15;
+        }
+
+        const { data, error } = await supabase.from('estoque').update(updates).eq('id', targetItem.id).select();
         if (error) throw error;
 
         const updated = data[0];
         if (setEstoque && updated) {
-          setEstoque(prev => prev.map(item => item.id === args.id ? updated : item));
+          setEstoque(prev => prev.map(item => item.id === targetItem.id ? updated : item));
         }
 
         if (addAtividade) {
-          addAtividade('Estoque Atualizado', `[IA Assistente] Alterou estoque de ${itemData.nome} de ${itemData.quantidade} para ${args.nova_quantidade}.`, 'estoque');
+          addAtividade('Cadastro Editado', `[IA Assistente] Corrigiu/Editou dados de "${updated.nome}".`, 'estoque');
         }
         if (addAlerta) {
-          addAlerta(`Estoque de "${itemData.nome}" atualizado para ${args.nova_quantidade}!`, 'success');
+          addAlerta(`Item "${updated.nome}" corrigido com sucesso!`, 'success');
         }
 
-        return { success: true, message: `Estoque de '${itemData.nome}' atualizado para ${args.nova_quantidade}.`, produto: updated };
+        return { 
+          success: true, 
+          message: `Produto '${updated.nome}' atualizado com sucesso! Novos dados: Quantidade: ${updated.quantidade}, Custo: R$ ${Number(updated.preco_custo).toFixed(2)}, Preço PIX: R$ ${Number(updated.preco_venda).toFixed(2)}, Cartão: R$ ${Number(updated.preco_credito || updated.preco_venda * 1.15).toFixed(2)}.`, 
+          produto: updated 
+        };
       }
+
+      case 'atualizar_estoque': {
+        let targetItem = null;
+        if (args.id) {
+          const { data } = await supabase.from('estoque').select('*').eq('id', args.id).single();
+          targetItem = data;
+        } else if (args.termo_busca) {
+          const { data } = await supabase.from('estoque').select('*').ilike('nome', `%${args.termo_busca}%`).limit(1);
+          if (data && data.length > 0) targetItem = data[0];
+        }
+
+        if (!targetItem) {
+          return { error: `Produto não encontrado para atualizar estoque.` };
+        }
+
+        const { data, error } = await supabase.from('estoque').update({ quantidade: args.nova_quantidade }).eq('id', targetItem.id).select();
+        if (error) throw error;
+
+        const updated = data[0];
+        if (setEstoque && updated) {
+          setEstoque(prev => prev.map(item => item.id === targetItem.id ? updated : item));
+        }
+
+        if (addAtividade) {
+          addAtividade('Estoque Atualizado', `[IA Assistente] Alterou estoque de ${updated.nome} de ${targetItem.quantidade} para ${args.nova_quantidade}.`, 'estoque');
+        }
+        if (addAlerta) {
+          addAlerta(`Estoque de "${updated.nome}" atualizado para ${args.nova_quantidade}!`, 'success');
+        }
+
+        return { success: true, message: `Estoque de '${updated.nome}' atualizado para ${args.nova_quantidade} unidades.`, produto: updated };
+      }
+
+      case 'excluir_produto': {
+        let targetItem = null;
+        if (args.id) {
+          const { data } = await supabase.from('estoque').select('*').eq('id', args.id).single();
+          targetItem = data;
+        } else if (args.termo_busca) {
+          const { data } = await supabase.from('estoque').select('*').ilike('nome', `%${args.termo_busca}%`).limit(1);
+          if (data && data.length > 0) targetItem = data[0];
+        }
+
+        if (!targetItem) {
+          return { error: `Produto '${args.termo_busca || args.id}' não encontrado para exclusão.` };
+        }
+
+        const { error } = await supabase.from('estoque').delete().eq('id', targetItem.id);
+        if (error) throw error;
+
+        if (setEstoque) {
+          setEstoque(prev => prev.filter(item => item.id !== targetItem.id));
+        }
+
+        if (addAtividade) {
+          addAtividade('Item Excluído do Estoque', `[IA Assistente] Excluiu o produto "${targetItem.nome}".`, 'estoque');
+        }
+        if (addAlerta) {
+          addAlerta(`Produto "${targetItem.nome}" apagado do estoque.`, 'success');
+        }
+
+        return { success: true, message: `Produto '${targetItem.nome}' (ID: ${targetItem.id}) foi removido do estoque com sucesso.` };
+      }
+
       case 'gerar_lista_pedidos': {
         const { data: allData, error: errAll } = await supabase.from('estoque').select('*');
         if (errAll) throw errAll;
         const faltantes = allData.filter(item => item.quantidade <= (item.estoque_minimo || 0));
         return { total_items_precisando_reposicao: faltantes.length, itens: faltantes };
       }
+
       default:
         throw new Error(`Tool ${call.function.name} not found`);
     }
@@ -437,7 +581,7 @@ export default function EstoqueBot() {
             <form onSubmit={e => { e.preventDefault(); handleSendMessage(); }} style={{ display: 'flex', gap: '10px' }}>
               <input
                 type="text"
-                placeholder="Ex: Buscar tela do iPhone 13..."
+                placeholder="Ex: Buscar, cadastrar ou corrigir produto..."
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 disabled={isLoading}

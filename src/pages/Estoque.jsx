@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { useData } from '../App';
-import { supabase } from '../supabaseClient'
+import { useData, useAuth } from '../App';
+import { supabase } from '../supabaseClient';
 import EstoqueBot from '../components/EstoqueBot';
 import { 
-  Package, Search, Plus, Edit2, AlertTriangle, 
+  Package, Search, Plus, Edit2, Trash2, AlertTriangle, 
   ArrowUpRight, ArrowDownRight, Archive, Box, Filter, Flame
 } from 'lucide-react';
 
@@ -17,6 +17,7 @@ const formatCurrency = (value) => {
 
 export default function Estoque() {
   const { estoque, setEstoque, addAtividade, addAlerta } = useData();
+  const { user } = useAuth();
   
   // State
   const [filter, setFilter] = useState('todos'); // todos, pecas, produtos, baixo
@@ -45,6 +46,21 @@ export default function Estoque() {
     quantidade: 1,
     motivo: ''
   });
+
+  // Check if current logged-in user has management/higher role permission
+  const isCargoMaior = useMemo(() => {
+    if (!user) return false;
+    const cargoLower = (user.cargo || '').toLowerCase();
+    const isEmailAdmin = user.email === 'admin@cellexpress.com';
+    const hasAdminRole = user.papeis?.includes('funcionarios') || user.papeis?.includes('admin');
+    const isManagerRole = cargoLower.includes('admin') || 
+                          cargoLower.includes('gerente') || 
+                          cargoLower.includes('dono') || 
+                          cargoLower.includes('diretor') ||
+                          cargoLower.includes('gestor') ||
+                          cargoLower.includes('supervisor');
+    return isEmailAdmin || hasAdminRole || isManagerRole;
+  }, [user]);
 
   // KPIs
   const kpis = useMemo(() => {
@@ -100,6 +116,10 @@ export default function Estoque() {
 
   const handleSaveItem = async (e) => {
     e.preventDefault();
+    const custo = Number(itemForm.preco_custo);
+    const venda = Number(itemForm.preco_venda);
+    const credito = venda * 1.15;
+
     if (editingItem) {
       // Edit
       const updates = {
@@ -107,8 +127,10 @@ export default function Estoque() {
         categoria: itemForm.categoria,
         quantidade: Number(itemForm.quantidade),
         estoque_minimo: Number(itemForm.estoque_minimo),
-        preco_custo: Number(itemForm.preco_custo),
-        preco_venda: Number(itemForm.preco_venda),
+        quantidade_minima: Number(itemForm.estoque_minimo),
+        preco_custo: custo,
+        preco_venda: venda,
+        preco_credito: credito,
         precisa_aquecer: !!itemForm.precisa_aquecer
       };
       
@@ -120,7 +142,7 @@ export default function Estoque() {
       }
       
       setEstoque(prev => prev.map(i => i.id === editingItem.id ? { ...i, ...updates } : i));
-      if(addAtividade) addAtividade(`Item atualizado no estoque: ${itemForm.nome}`);
+      if(addAtividade) addAtividade('Item Atualizado no Estoque', `[${user?.nome || user?.cargo || 'Admin'}] Editou o item "${itemForm.nome}".`, 'estoque');
       if(addAlerta) addAlerta('Item salvo com sucesso', 'success');
     } else {
       // Add
@@ -129,8 +151,10 @@ export default function Estoque() {
         categoria: itemForm.categoria,
         quantidade: Number(itemForm.quantidade),
         estoque_minimo: Number(itemForm.estoque_minimo),
-        preco_custo: Number(itemForm.preco_custo),
-        preco_venda: Number(itemForm.preco_venda),
+        quantidade_minima: Number(itemForm.estoque_minimo),
+        preco_custo: custo,
+        preco_venda: venda,
+        preco_credito: credito,
         precisa_aquecer: !!itemForm.precisa_aquecer
       };
       
@@ -141,9 +165,31 @@ export default function Estoque() {
         return;
       }
       
-      setEstoque(prev => [...prev, data[0]]);
-      if(addAtividade) addAtividade(`Novo item adicionado ao estoque: ${itemForm.nome}`);
+      setEstoque(prev => [data[0], ...prev]);
+      if(addAtividade) addAtividade('Novo Item no Estoque', `[${user?.nome || user?.cargo || 'Admin'}] Cadastrou "${itemForm.nome}".`, 'estoque');
       if(addAlerta) addAlerta('Item adicionado com sucesso', 'success');
+    }
+    setIsItemModalOpen(false);
+  };
+
+  const handleDeleteItem = async (item) => {
+    if (!item) return;
+    if (!window.confirm(`Tem certeza que deseja APAGAR o produto "${item.nome}" permanentemente do estoque?`)) {
+      return;
+    }
+
+    const { error } = await supabase.from('estoque').delete().eq('id', item.id);
+    if (error) {
+      if (addAlerta) addAlerta('Erro ao excluir item do estoque.', 'error');
+      return;
+    }
+
+    setEstoque(prev => prev.filter(i => i.id !== item.id));
+    if (addAtividade) {
+      addAtividade('Item Excluído do Estoque', `[${user?.nome || user?.cargo || 'Admin'}] Excluiu o produto "${item.nome}" do estoque.`, 'estoque');
+    }
+    if (addAlerta) {
+      addAlerta(`Item "${item.nome}" apagado com sucesso!`, 'success');
     }
     setIsItemModalOpen(false);
   };
@@ -169,7 +215,7 @@ export default function Estoque() {
     }
 
     setEstoque(prev => prev.map(i => i.id === item.id ? { ...i, quantidade: novaQuantidade } : i));
-    if(addAtividade) addAtividade(`${isEntrada ? 'Entrada' : 'Saída'} de estoque: ${qtd}x ${item.nome} (${movForm.motivo})`);
+    if(addAtividade) addAtividade('Movimentação de Estoque', `${isEntrada ? 'Entrada' : 'Saída'}: ${qtd}x ${item.nome} (${movForm.motivo})`, 'estoque');
     
     if (novaQuantidade <= item.estoque_minimo) {
       if(addAlerta) addAlerta(`Estoque baixo: ${item.nome} restam apenas ${novaQuantidade} unidades.`, 'warning');
@@ -302,7 +348,7 @@ export default function Estoque() {
                   <td data-label="Produto" style={{ padding: '15px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {isBaixo && <AlertTriangle size={16} color={isCritico ? 'var(--danger, #FF4444)' : 'var(--warning, #FFAA00)'} />}
-                      <span style={{ fontWeight: '500' }}>{produto}</span>
+                      <span style={{ fontWeight: '500' }}>{produto || item.nome}</span>
                       {item.precisa_aquecer && (
                         <span title="Precisa de separadora (esquentar)" style={{ color: 'var(--danger, #FF4444)' }}>
                           <Flame size={16} />
@@ -314,7 +360,7 @@ export default function Estoque() {
                     {modelo}
                   </td>
                   <td data-label="Marca" style={{ padding: '15px' }}>
-                    {marca !== '-' ? (
+                    {marca !== '-' && marca !== '' ? (
                       <span style={{
                         padding: '4px 8px', borderRadius: '12px', fontSize: '0.8rem',
                         backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#fff'
@@ -345,9 +391,31 @@ export default function Estoque() {
                     {margem}%
                   </td>
                   <td data-label="Ações" style={{ padding: '15px' }}>
-                    <button className="btn btn-secondary" style={{ padding: '5px' }} onClick={() => handleOpenItemModal(item)}>
-                      <Edit2 size={16} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button 
+                        className="btn btn-secondary" 
+                        style={{ padding: '6px 8px' }} 
+                        title="Editar Item" 
+                        onClick={() => handleOpenItemModal(item)}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      {isCargoMaior && (
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ 
+                            padding: '6px 8px', 
+                            color: 'var(--danger, #FF4444)', 
+                            borderColor: 'rgba(255, 68, 68, 0.3)',
+                            backgroundColor: 'rgba(255, 68, 68, 0.08)'
+                          }} 
+                          title="Excluir Item do Estoque (Cargos Maiores)" 
+                          onClick={() => handleDeleteItem(item)}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -387,12 +455,10 @@ export default function Estoque() {
                 </div>
               </div>
 
-              {!editingItem && (
-                <div className="form-group" style={{ marginBottom: '15px' }}>
-                  <label>Quantidade Inicial</label>
-                  <input required type="number" min="0" value={itemForm.quantidade} onChange={e => setItemForm({...itemForm, quantidade: e.target.value})} style={{ width: '100%', padding: '8px' }} />
-                </div>
-              )}
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label>Quantidade {editingItem ? 'em Estoque' : 'Inicial'}</label>
+                <input required type="number" min="0" value={itemForm.quantidade} onChange={e => setItemForm({...itemForm, quantidade: e.target.value})} style={{ width: '100%', padding: '8px' }} />
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
                 <div className="form-group">
@@ -413,9 +479,29 @@ export default function Estoque() {
                 </label>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setIsItemModalOpen(false)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">Salvar</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+                {editingItem && isCargoMaior ? (
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    onClick={() => handleDeleteItem(editingItem)}
+                    style={{ 
+                      backgroundColor: 'rgba(255,68,68,0.15)', 
+                      color: 'var(--danger, #FF4444)', 
+                      borderColor: 'var(--danger, #FF4444)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '6px' 
+                    }}
+                  >
+                    <Trash2 size={16} /> Excluir Item
+                  </button>
+                ) : <div />}
+
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setIsItemModalOpen(false)}>Cancelar</button>
+                  <button type="submit" className="btn btn-primary">Salvar</button>
+                </div>
               </div>
             </form>
           </div>
@@ -466,7 +552,7 @@ export default function Estoque() {
           </div>
         </div>
       )}
-        <EstoqueBot addAlerta={addAlerta} />
+        <EstoqueBot />
       </div>
     );
   }
