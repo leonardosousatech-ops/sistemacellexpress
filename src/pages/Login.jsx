@@ -53,7 +53,12 @@ export default function Login() {
       await loginWithGoogle()
     } catch (err) {
       console.error('Google login error:', err)
-      setError(err?.message || 'Erro ao conectar com a conta Google. Tente novamente.')
+      const msg = err?.message || ''
+      if (msg.includes('provider is not enabled') || msg.includes('validation_failed') || msg.includes('Unsupported provider')) {
+        setError('O login com Google precisa ser ativado no painel do Supabase (Authentication > Providers > Google). Enquanto isso, você pode entrar ou criar conta normalmente com seu Email e Senha acima.')
+      } else {
+        setError(msg || 'Erro ao conectar com a conta Google. Tente novamente.')
+      }
       setLoadingGoogle(false)
     }
   }
