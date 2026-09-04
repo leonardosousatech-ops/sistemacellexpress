@@ -8,6 +8,7 @@ import Estoque from './pages/Estoque'
 import Financeiro from './pages/Financeiro'
 import Garantias from './pages/Garantias'
 import Funcionarios from './pages/Funcionarios'
+import { supabase } from './supabaseClient'
 
 // ===== AUTH CONTEXT =====
 export const AuthContext = createContext(null)
@@ -16,14 +17,12 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
-// ===== MOCK DATA STORE =====
+// ===== DATA STORE =====
 export const DataContext = createContext(null)
 
 export function useData() {
   return useContext(DataContext)
 }
-
-import { supabase } from './supabaseClient'
 
 function App() {
   const [user, setUser] = useState(null)
@@ -60,10 +59,45 @@ function App() {
 
   const fetchUserAndData = async (authId) => {
     try {
-      const { data: funcData } = await supabase.from('funcionarios').select('*').eq('auth_id', authId).single()
+      // 1. Try to find existing funcionario by auth_id
+      let { data: funcData } = await supabase.from('funcionarios').select('*').eq('auth_id', authId).maybeSingle()
+
+      // 2. If not found by auth_id, check currently logged auth user
+      if (!funcData) {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (authUser) {
+          // Check if funcionario exists by email
+          const { data: existingByEmail } = await supabase.from('funcionarios').select('*').eq('email', authUser.email).maybeSingle()
+          if (existingByEmail) {
+            // Link auth_id
+            const { data: updated } = await supabase.from('funcionarios').update({ auth_id: authId }).eq('id', existingByEmail.id).select().single()
+            funcData = updated || existingByEmail
+          } else {
+            // Create a new funcionario record for new sign up or Google OAuth user
+            const userName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email.split('@')[0]
+            const isAdminEmail = authUser.email === 'admin@cellexpress.com'
+            const newFunc = {
+              auth_id: authId,
+              nome: userName,
+              email: authUser.email,
+              cargo: isAdminEmail ? 'Administrador' : 'Atendente',
+              ativo: true,
+              telefone: '',
+              papeis: isAdminEmail 
+                ? ['balcao', 'laboratorio', 'estoque', 'financeiro', 'garantias', 'funcionarios']
+                : ['balcao', 'laboratorio', 'estoque', 'financeiro', 'garantias']
+            }
+            const { data: created, error: createErr } = await supabase.from('funcionarios').insert([newFunc]).select().single()
+            if (!createErr && created) {
+              funcData = created
+            }
+          }
+        }
+      }
+
       if (funcData && funcData.ativo) {
         setUser(funcData)
-        await loadData() // only load all data after we have the user
+        await loadData()
       } else {
         await supabase.auth.signOut()
         setUser(null)
@@ -109,10 +143,38 @@ function App() {
   const login = async (email, senha) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: senha })
     if (error || !data.user) {
-      return null
+      return { success: false, error: error?.message || 'Email ou senha incorretos' }
     }
-    // Session change listener will handle the rest
-    return true
+    return { success: true }
+  }
+
+  const loginWithGoogle = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    })
+    if (error) {
+      throw error
+    }
+    return data
+  }
+
+  const signUp = async (nome, email, senha) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: senha,
+      options: {
+        data: {
+          full_name: nome
+        }
+      }
+    })
+    if (error) {
+      throw error
+    }
+    return data
   }
 
   const logout = async () => {
@@ -153,32 +215,39 @@ function App() {
   }
 
   if (loading) {
-    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700' }}>Carregando sistema...</div>
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a0a0a', color: '#FFD700', gap: '16px' }}>
+        <div style={{ width: '36px', height: '36px', border: '3px solid rgba(255,215,0,0.2)', borderTopColor: '#FFD700', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ fontSize: '15px', fontWeight: '600' }}>Carregando Cell Express...</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
   }
 
   if (!user) {
     return (
-      <AuthContext.Provider value={{ user, setUser, login, logout }}>
+      <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, signUp, logout }}>
         <Login />
       </AuthContext.Provider>
     )
   }
 
   // Determine default route based on user's first role
-  const defaultRoute = `/${user.papeis[0]}`
+  const papeisList = Array.isArray(user.papeis) ? user.papeis : []
+  const defaultRoute = papeisList.length > 0 ? `/${papeisList[0]}` : '/balcao'
 
   return (
-    <AuthContext.Provider value={{ user, setUser, login, logout }}>
+    <AuthContext.Provider value={{ user, setUser, login, loginWithGoogle, signUp, logout }}>
       <DataContext.Provider value={dataValue}>
         <BrowserRouter>
           <Layout>
             <Routes>
-              {user.papeis.includes('balcao') && <Route path="/balcao" element={<Balcao />} />}
-              {user.papeis.includes('laboratorio') && <Route path="/laboratorio" element={<Laboratorio />} />}
-              {user.papeis.includes('estoque') && <Route path="/estoque" element={<Estoque />} />}
-              {user.papeis.includes('financeiro') && <Route path="/financeiro" element={<Financeiro />} />}
-              {user.papeis.includes('garantias') && <Route path="/garantias" element={<Garantias />} />}
-              {user.papeis.includes('funcionarios') && <Route path="/funcionarios" element={<Funcionarios />} />}
+              {papeisList.includes('balcao') && <Route path="/balcao" element={<Balcao />} />}
+              {papeisList.includes('laboratorio') && <Route path="/laboratorio" element={<Laboratorio />} />}
+              {papeisList.includes('estoque') && <Route path="/estoque" element={<Estoque />} />}
+              {papeisList.includes('financeiro') && <Route path="/financeiro" element={<Financeiro />} />}
+              {papeisList.includes('garantias') && <Route path="/garantias" element={<Garantias />} />}
+              {papeisList.includes('funcionarios') && <Route path="/funcionarios" element={<Funcionarios />} />}
               <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
           </Layout>
