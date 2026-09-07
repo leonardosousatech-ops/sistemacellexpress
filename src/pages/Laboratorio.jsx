@@ -4,11 +4,12 @@ import { supabase } from '../supabaseClient'
 import DamageMap from '../components/DamageMap'
 import DeviceChecklist from '../components/DeviceChecklist'
 import { exportToCSV } from '../utils/exportUtils'
+import { sendOSWhatsApp } from '../utils/whatsappUtils'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
   Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2,
   Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers, Rows3, Columns3, Check,
-  Tag, Download, ShieldCheck
+  Tag, Download, ShieldCheck, MessageCircle
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -605,18 +606,19 @@ export default function Laboratorio() {
             )}
           </div>
 
-          {/* Advance button */}
-          {NEXT_STATUS[os.status] && (
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {/* WhatsApp button */}
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                handleUpdateStatus(NEXT_STATUS[os.status], os)
+                const client = clientes.find(c => c.id === os.id_cliente)
+                sendOSWhatsApp(os, client)
               }}
-              title={`Avançar para ${STATUS_LABELS[NEXT_STATUS[os.status]]}`}
+              title="Enviar Notificação WhatsApp para o Cliente"
               style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'var(--text-primary, #fff)',
+                backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                color: '#25D366',
+                border: '1px solid rgba(37, 211, 102, 0.3)',
                 borderRadius: '4px',
                 padding: '3px 6px',
                 cursor: 'pointer',
@@ -626,9 +628,34 @@ export default function Laboratorio() {
                 fontSize: '11px'
               }}
             >
-              <ArrowRight size={12} />
+              <MessageCircle size={12} />
             </button>
-          )}
+
+            {/* Advance button */}
+            {NEXT_STATUS[os.status] && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleUpdateStatus(NEXT_STATUS[os.status], os)
+                }}
+                title={`Avançar para ${STATUS_LABELS[NEXT_STATUS[os.status]]}`}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'var(--text-primary, #fff)',
+                  borderRadius: '4px',
+                  padding: '3px 6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontSize: '11px'
+                }}
+              >
+                <ArrowRight size={12} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     )
@@ -706,6 +733,30 @@ export default function Laboratorio() {
           </div>
 
           <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                const client = clientes.find(c => c.id === os.id_cliente)
+                sendOSWhatsApp(os, client)
+              }}
+              title="Enviar Notificação WhatsApp para o Cliente"
+              style={{
+                backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                color: '#25D366',
+                border: '1px solid rgba(37, 211, 102, 0.4)',
+                padding: '5px 10px',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <MessageCircle size={13} /> WhatsApp
+            </button>
+
             {NEXT_STATUS[os.status] && (
               <button
                 onClick={(e) => {
@@ -1061,6 +1112,29 @@ export default function Laboratorio() {
             <div className="modal-header">
               <h3>OS #{selectedOS.id} — {selectedOS.modelo}</h3>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button 
+                  className="btn" 
+                  style={{ 
+                    padding: '6px 12px', 
+                    fontSize: '12px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '5px',
+                    backgroundColor: '#25D366',
+                    color: '#fff',
+                    border: 'none',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    borderRadius: '6px'
+                  }} 
+                  onClick={() => {
+                    const client = clientes.find(c => c.id === selectedOS.id_cliente)
+                    sendOSWhatsApp(selectedOS, client)
+                  }}
+                  title="Enviar Notificação / Detalhes da OS via WhatsApp"
+                >
+                  <MessageCircle size={14} /> WhatsApp
+                </button>
                 <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={handlePrintThermalSticker} title="Imprimir Etiqueta Adesiva para Bancada / Aparelho">
                   <Tag size={14} color="var(--accent-yellow, #FFD700)" /> Etiqueta Bancada
                 </button>

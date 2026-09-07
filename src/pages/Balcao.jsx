@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient'
 import DamageMap from '../components/DamageMap';
 import DeviceChecklist from '../components/DeviceChecklist';
 import { exportToCSV } from '../utils/exportUtils';
+import { sendOSWhatsApp } from '../utils/whatsappUtils';
 import { 
   Users, 
   Wrench, 
@@ -22,7 +23,8 @@ import {
   Tag,
   Printer,
   Download,
-  ShieldCheck
+  ShieldCheck,
+  MessageCircle
 } from 'lucide-react';
 
 export default function Balcao() {
@@ -476,9 +478,29 @@ export default function Balcao() {
             {osProntas.map(os => {
               const cliente = clientes?.find(c => c.id === (os.clienteId || os.id_cliente));
               return (
-                <li key={os.id} style={{ fontSize: '0.9rem', color: '#fff' }}>
-                  <strong style={{ color: 'var(--accent-yellow)' }}>OS #{os.id}</strong> — {os.tipoAparelho || os.tipo_aparelho} {os.modelo} 
-                  <span style={{ color: 'var(--text-secondary, #A0A0A0)', marginLeft: '6px' }}>({cliente?.nome || 'Cliente Desconhecido'})</span>
+                <li key={os.id} style={{ fontSize: '0.9rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span>
+                    <strong style={{ color: 'var(--accent-yellow)' }}>OS #{os.id}</strong> — {os.tipoAparelho || os.tipo_aparelho} {os.modelo} 
+                    <span style={{ color: 'var(--text-secondary, #A0A0A0)', marginLeft: '6px' }}>({cliente?.nome || 'Cliente Desconhecido'})</span>
+                  </span>
+                  <button
+                    onClick={() => sendOSWhatsApp(os, cliente)}
+                    style={{
+                      backgroundColor: '#25D366',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '4px',
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                  >
+                    <MessageCircle size={12} /> Avisar Retirada
+                  </button>
                 </li>
               )
             })}
@@ -602,7 +624,30 @@ export default function Balcao() {
                       </td>
                       <td data-label="Data Entrada" style={{ padding: '10px' }}>{new Date(os.data_entrada || os.created_at || new Date()).toLocaleDateString('pt-BR')}</td>
                       <td data-label="Ações" style={{ padding: '10px' }}>
-                        <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => handleViewOS(os)}>Detalhes</button>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <button className="btn btn-sm btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => handleViewOS(os)}>Detalhes</button>
+                          <button 
+                            style={{ 
+                              padding: '5px 8px', 
+                              fontSize: '12px', 
+                              backgroundColor: 'rgba(37, 211, 102, 0.15)', 
+                              color: '#25D366', 
+                              border: '1px solid rgba(37, 211, 102, 0.3)', 
+                              borderRadius: '4px', 
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }} 
+                            onClick={() => {
+                              const client = clientes?.find(c => c.id === os.id_cliente || c.id === os.clienteId);
+                              sendOSWhatsApp(os, client);
+                            }}
+                            title="Enviar WhatsApp"
+                          >
+                            <MessageCircle size={13} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -1100,7 +1145,29 @@ export default function Balcao() {
               <p><strong>Data de Entrada:</strong> {new Date(viewOsData.dataEntrada || viewOsData.data_entrada).toLocaleString('pt-BR')}</p>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={() => {
+                    const client = clientes?.find(c => c.id === viewOsData.clienteId || c.id === viewOsData.id_cliente);
+                    sendOSWhatsApp(viewOsData, client);
+                  }} 
+                  style={{ 
+                    padding: '8px 14px', 
+                    backgroundColor: '#25D366', 
+                    color: '#fff', 
+                    border: 'none', 
+                    borderRadius: '6px', 
+                    fontWeight: 'bold', 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '6px',
+                    fontSize: '13px'
+                  }}
+                  title="Enviar detalhes da OS para o WhatsApp do cliente"
+                >
+                  <MessageCircle size={16} /> Enviar WhatsApp
+                </button>
                 <button 
                   onClick={() => handlePrintThermalSticker(viewOsData)} 
                   style={{ 

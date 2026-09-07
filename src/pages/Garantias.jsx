@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../App';
 import { supabase } from '../supabaseClient';
-import { Shield, ShieldAlert, ShieldX, RefreshCcw, Search, Filter, AlertTriangle, PackageMinus, X, Plus } from 'lucide-react';
+import { sendOSWhatsApp } from '../utils/whatsappUtils';
+import { Shield, ShieldAlert, ShieldX, RefreshCcw, Search, Filter, AlertTriangle, PackageMinus, X, Plus, MessageCircle } from 'lucide-react';
 
 export default function Garantias() {
   const { ordensServico, clientes, estoque, addAtividade, addAlerta } = useData();
@@ -281,6 +282,31 @@ export default function Garantias() {
                   transition: 'width 0.3s ease'
                 }} />
               </div>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  const client = clientes.find(c => c.id === w.id_cliente || c.id === w.cliente_id);
+                  sendOSWhatsApp(w, client);
+                }}
+                style={{
+                  backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                  color: '#25D366',
+                  border: '1px solid rgba(37, 211, 102, 0.3)',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title="Notificar cliente sobre a garantia via WhatsApp"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </button>
             </div>
           </div>
         ))}
