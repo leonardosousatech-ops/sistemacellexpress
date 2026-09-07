@@ -2,10 +2,13 @@ import { useState, useMemo, useEffect } from 'react'
 import { useData, useAuth } from '../App'
 import { supabase } from '../supabaseClient'
 import DamageMap from '../components/DamageMap'
+import DeviceChecklist from '../components/DeviceChecklist'
+import { exportToCSV } from '../utils/exportUtils'
 import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
   Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2,
-  Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers, Rows3, Columns3, Check
+  Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers, Rows3, Columns3, Check,
+  Tag, Download, ShieldCheck
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -274,6 +277,24 @@ export default function Laboratorio() {
     if (addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
   }
 
+  const handleSaveChecklistAndSenha = async (newChecklist, newSenha) => {
+    if (!selectedOS) return
+    const { error } = await supabase.from('ordens_servico').update({
+      checklist: newChecklist,
+      senha_aparelho: newSenha
+    }).eq('id', selectedOS.id)
+
+    if (error) {
+      if (addAlerta) addAlerta('Erro ao salvar checklist no banco.', 'error')
+      return
+    }
+
+    const updated = { ...selectedOS, checklist: newChecklist, senha_aparelho: newSenha }
+    setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
+    setSelectedOS(updated)
+    if (addAlerta) addAlerta('Checklist e senha do aparelho salvos com sucesso!', 'success')
+  }
+
   const handleDeleteOS = async () => {
     if (!window.confirm('Tem certeza que deseja APAGAR esta OS? Isso não pode ser desfeito!')) return
     
@@ -328,6 +349,7 @@ export default function Laboratorio() {
 
   const getPecaNome = (id_item) => estoque.find(e => e.id === id_item)?.nome || 'Peça removida'
 
+  // Print Standard A4 / Receipt
   const handlePrint = () => {
     if (!selectedOS) return
     const printWindow = window.open('', '_blank')
@@ -352,6 +374,7 @@ export default function Laboratorio() {
             <p><strong>OS:</strong> #${selectedOS.id}</p>
             <p><strong>Cliente:</strong> ${getClientName(selectedOS.id_cliente)}</p>
             <p><strong>Aparelho:</strong> ${selectedOS.modelo}</p>
+            ${selectedOS.senha_aparelho ? `<p><strong>Senha:</strong> ${selectedOS.senha_aparelho}</p>` : ''}
             <p><strong>Problema:</strong> ${selectedOS.problema}</p>
             <br/>
             <p><strong>Data da Conclusao:</strong> ${selectedOS.data_conclusao ? new Date(selectedOS.data_conclusao).toLocaleDateString('pt-BR') : '-'}</p>
@@ -362,17 +385,11 @@ export default function Laboratorio() {
           <div class="footer">
             <p><strong>TERMO DE GARANTIA (90 DIAS)</strong></p>
             <p>A garantia cobre estritamente as pecas substituidas e a mao de obra aplicada no reparo supracitado.</p>
-            <p>Esta garantia sera IMEDIATAMENTE ANULADA caso o aparelho apresente:</p>
-            <p>- Sinais de queda, trincos, amassados ou QUALQUER TIPO DE MAU USO.</p>
-            <p>- Contato com liquidos, umidade ou oxidacao.</p>
-            <p>- Rompimento dos selos de garantia ou tentativa de conserto por terceiros.</p>
-            <p>A garantia NÃO COBRE defeitos decorrentes de mau uso por parte do usuario.</p>
+            <p>Esta garantia sera IMEDIATAMENTE ANULADA caso o aparelho apresente sinais de queda, liquidos ou intervencao de terceiros.</p>
             <br/>
             <p style="text-align: center;">Assinatura do Cliente:</p>
             <br/><br/>
             <p style="border-top: 1px solid #000; margin: 0 20px;"></p>
-            <br/>
-            <p style="text-align: center;">Obrigado pela preferencia!</p>
           </div>
           <script>
             window.onload = function() { window.print(); window.close(); }
@@ -381,6 +398,115 @@ export default function Laboratorio() {
       </html>
     `)
     printWindow.document.close()
+  }
+
+  // Print Thermal Sticky Label (58mm / 80mm Bancada)
+  const handlePrintThermalSticker = () => {
+    if (!selectedOS) return
+    const client = clientes.find(c => c.id === selectedOS.id_cliente)
+    const clientName = client?.nome || 'Cliente Desconhecido'
+    const clientPhone = client?.telefone || ''
+    const dateStr = selectedOS.data_entrada 
+      ? new Date(selectedOS.data_entrada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : new Date().toLocaleString('pt-BR')
+
+    const checklistData = selectedOS.checklist || {}
+    const itemsEntries = Object.entries(checklistData)
+    const checklistSummary = itemsEntries.length > 0 
+      ? itemsEntries.map(([k, v]) => `${k.toUpperCase()}:${v === 'ok' ? 'OK' : v === 'defeito' ? 'DEF' : 'NT'}`).join(' ') 
+      : ''
+
+    const printWindow = window.open('', '_blank')
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Etiqueta OS #${selectedOS.id}</title>
+          <style>
+            @page { size: 58mm auto; margin: 0; }
+            body {
+              font-family: Arial, Helvetica, sans-serif;
+              width: 54mm;
+              padding: 2mm;
+              margin: 0 auto;
+              font-size: 11px;
+              color: #000;
+              line-height: 1.2;
+            }
+            .title { text-align: center; font-size: 11px; font-weight: bold; border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 4px; }
+            .os-badge { text-align: center; font-size: 22px; font-weight: 900; margin: 3px 0; letter-spacing: 1px; }
+            .barcode { font-family: monospace; letter-spacing: 3px; font-weight: bold; text-align: center; margin: 2px 0 6px 0; font-size: 12px; }
+            .row { margin-bottom: 3px; font-size: 11px; }
+            .label { font-weight: bold; font-size: 10px; text-transform: uppercase; }
+            .val { font-size: 11px; }
+            .highlight { background: #000; color: #fff; padding: 2px 5px; font-weight: 900; display: inline-block; border-radius: 3px; font-size: 11px; }
+            .footer-line { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; text-align: center; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="title">CELL EXPRESS • BANCADA</div>
+          <div class="os-badge">OS #${selectedOS.id}</div>
+          <div class="barcode">*OS${selectedOS.id}*</div>
+          
+          <div class="row">
+            <span class="label">Cliente:</span> <span class="val"><strong>${clientName}</strong></span>
+          </div>
+          ${clientPhone ? `<div class="row"><span class="label">Tel:</span> <span class="val">${clientPhone}</span></div>` : ''}
+          
+          <div class="row">
+            <span class="label">Aparelho:</span> <span class="val"><strong>${selectedOS.modelo || selectedOS.tipo_aparelho}</strong></span>
+          </div>
+          
+          ${selectedOS.senha_aparelho ? `
+          <div class="row" style="margin: 4px 0;">
+            <span class="label">Senha / PIN:</span> <span class="highlight">${selectedOS.senha_aparelho}</span>
+          </div>` : ''}
+
+          <div class="row">
+            <span class="label">Defeito:</span> <span class="val">${selectedOS.problema || 'Não informado'}</span>
+          </div>
+
+          ${selectedOS.valor ? `
+          <div class="row">
+            <span class="label">Valor:</span> <span class="val"><strong>R$ ${Number(selectedOS.valor).toFixed(2)}</strong></span>
+          </div>` : ''}
+
+          ${checklistSummary ? `
+          <div class="row" style="font-size: 8px; color: #333; margin-top: 4px; border-top: 0.5px dotted #666; padding-top: 2px;">
+            ${checklistSummary}
+          </div>` : ''}
+
+          <div class="footer-line">
+            Entrada: ${dateStr}
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
+
+  // Export OS list in Excel (.csv)
+  const handleExportOS = () => {
+    const headers = ['ID', 'Cliente', 'Tipo Aparelho', 'Modelo', 'Status', 'Prioridade', 'Valor (R$)', 'Data Entrada', 'Data Conclusao', 'Garantia Ate', 'Problema', 'Senha Aparelho'];
+    const rows = ordensServico.map(os => [
+      os.id,
+      getClientName(os.id_cliente),
+      os.tipo_aparelho,
+      os.modelo,
+      STATUS_LABELS[os.status] || os.status,
+      os.prioridade,
+      os.valor ? Number(os.valor).toFixed(2) : '0.00',
+      os.data_entrada ? new Date(os.data_entrada).toLocaleDateString('pt-BR') : '',
+      os.data_conclusao ? new Date(os.data_conclusao).toLocaleDateString('pt-BR') : '',
+      os.garantia_ate ? new Date(os.garantia_ate).toLocaleDateString('pt-BR') : '',
+      os.problema,
+      os.senha_aparelho || ''
+    ]);
+    exportToCSV('Ordens_Servico_CellExpress', headers, rows);
+    if (addAlerta) addAlerta('Relatório de OS exportado em Excel (.csv) com sucesso!', 'success');
   }
 
   const tabs = [
@@ -572,6 +698,11 @@ export default function Laboratorio() {
                 <Flame size={14} />
               </span>
             )}
+            {os.senha_aparelho && (
+              <span title="Senha informada" style={{ color: 'var(--accent-yellow, #FFD700)', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                🔑 {os.senha_aparelho}
+              </span>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -662,7 +793,7 @@ export default function Laboratorio() {
         </div>
       </div>
 
-      {/* Control Bar: Search & 3-Button View Switcher (Estilo Image 1) */}
+      {/* Control Bar: Search, View Switcher & Export */}
       <div className="card" style={{ marginTop: '16px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '400px' }}>
           <Search size={16} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -684,62 +815,73 @@ export default function Laboratorio() {
           )}
         </div>
 
-        {/* 3 View Mode Toggle Buttons (Estilo Image 1) */}
-        <div style={{ display: 'flex', background: 'var(--bg-primary, #0a0a0a)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border, #2a2a2a)', gap: '2px' }}>
-          <button
-            onClick={() => setViewMode('sections')}
-            title="Visualização 1 Coluna em Seções (Ideal para Celular)"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: 'none',
-              background: viewMode === 'sections' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
-              color: viewMode === 'sections' ? '#000' : 'var(--text-secondary, #A0A0A0)',
-              cursor: 'pointer',
-              transition: 'all 150ms ease'
-            }}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={handleExportOS} 
+            title="Exportar todas as Ordens de Serviço em Excel (.csv)"
+            style={{ padding: '7px 12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <Rows3 size={18} />
+            <Download size={15} /> Exportar OS (Excel)
           </button>
-          <button
-            onClick={() => setViewMode('kanban')}
-            title="Quadro Kanban (Grade 2x2 no Celular / Colunas no PC)"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: 'none',
-              background: viewMode === 'kanban' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
-              color: viewMode === 'kanban' ? '#000' : 'var(--text-secondary, #A0A0A0)',
-              cursor: 'pointer',
-              transition: 'all 150ms ease'
-            }}
-          >
-            <LayoutGrid size={18} />
-          </button>
-          <button
-            onClick={() => setViewMode('grid')}
-            title="Visualização Tradicional por Abas"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              borderRadius: '6px',
-              border: 'none',
-              background: viewMode === 'grid' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
-              color: viewMode === 'grid' ? '#000' : 'var(--text-secondary, #A0A0A0)',
-              cursor: 'pointer',
-              transition: 'all 150ms ease'
-            }}
-          >
-            <Columns3 size={18} />
-          </button>
+
+          {/* 3 View Mode Toggle Buttons */}
+          <div style={{ display: 'flex', background: 'var(--bg-primary, #0a0a0a)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border, #2a2a2a)', gap: '2px' }}>
+            <button
+              onClick={() => setViewMode('sections')}
+              title="Visualização 1 Coluna em Seções (Ideal para Celular)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: viewMode === 'sections' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+                color: viewMode === 'sections' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+                cursor: 'pointer',
+                transition: 'all 150ms ease'
+              }}
+            >
+              <Rows3 size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('kanban')}
+              title="Quadro Kanban (Grade 2x2 no Celular / Colunas no PC)"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: viewMode === 'kanban' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+                color: viewMode === 'kanban' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+                cursor: 'pointer',
+                transition: 'all 150ms ease'
+              }}
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              title="Visualização Tradicional por Abas"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: 'none',
+                background: viewMode === 'grid' ? 'var(--accent-yellow, #FFD700)' : 'transparent',
+                color: viewMode === 'grid' ? '#000' : 'var(--text-secondary, #A0A0A0)',
+                cursor: 'pointer',
+                transition: 'all 150ms ease'
+              }}
+            >
+              <Columns3 size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -918,13 +1060,14 @@ export default function Laboratorio() {
           <div className="modal" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>OS #{selectedOS.id} — {selectedOS.modelo}</h3>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {(selectedOS.status === 'pronto' || selectedOS.status === 'entregue') && (
-                  <button className="btn btn-secondary" style={{ padding: '5px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={handlePrint}>
-                    <Printer size={14} /> Imprimir Recibo
-                  </button>
-                )}
-                <button className="btn btn-danger" style={{ padding: '5px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: 'var(--danger)', color: '#fff', border: 'none' }} onClick={handleDeleteOS}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={handlePrintThermalSticker} title="Imprimir Etiqueta Adesiva para Bancada / Aparelho">
+                  <Tag size={14} color="var(--accent-yellow, #FFD700)" /> Etiqueta Bancada
+                </button>
+                <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px' }} onClick={handlePrint}>
+                  <Printer size={14} /> Recibo / Termo
+                </button>
+                <button className="btn btn-danger" style={{ padding: '6px 10px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '5px', backgroundColor: 'var(--danger)', color: '#fff', border: 'none' }} onClick={handleDeleteOS}>
                   <Trash2 size={14} /> Apagar OS
                 </button>
                 <button className="btn-icon" onClick={() => setSelectedOS(null)}><X size={18} /></button>
@@ -943,7 +1086,7 @@ export default function Laboratorio() {
                     <div>{selectedOS.tipo_aparelho} — {selectedOS.modelo}</div>
                   </div>
                   <div className="form-group">
-                    <label>Condição / Avarias</label>
+                    <label>Condição / Avarias Físicas</label>
                     {selectedOS.condicao && selectedOS.condicao.startsWith('[') ? (
                        <DamageMap readOnly={true} markers={JSON.parse(selectedOS.condicao)} />
                     ) : (
@@ -951,7 +1094,7 @@ export default function Laboratorio() {
                     )}
                   </div>
                   <div className="form-group">
-                    <label>Observações</label>
+                    <label>Observações / Problema</label>
                     <div>{selectedOS.problema}</div>
                   </div>
                 </div>
@@ -969,7 +1112,7 @@ export default function Laboratorio() {
                     <div>{new Date(selectedOS.data_entrada).toLocaleString('pt-BR')}</div>
                   </div>
                   <div className="form-group">
-                    <label>Valor da OS</label>
+                    <label>Valor da OS (R$)</label>
                     {selectedOS.status !== 'entregue' ? (
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <input 
@@ -980,13 +1123,23 @@ export default function Laboratorio() {
                           onChange={e => setValorInput(e.target.value)} 
                           style={{ flex: 1, padding: '8px' }} 
                         />
-                        <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar</button>
+                        <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar Valor</button>
                       </div>
                     ) : (
                        <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
                     )}
                   </div>
                 </div>
+              </div>
+
+              {/* Checklist & Senha do Aparelho */}
+              <div style={{ marginBottom: '24px' }}>
+                <DeviceChecklist 
+                  value={selectedOS.checklist || {}}
+                  senha={selectedOS.senha_aparelho || ''}
+                  onChange={(newChecklist) => handleSaveChecklistAndSenha(newChecklist, selectedOS.senha_aparelho || '')}
+                  onSenhaChange={(newSenha) => handleSaveChecklistAndSenha(selectedOS.checklist || {}, newSenha)}
+                />
               </div>
 
               {/* Separadora Info */}

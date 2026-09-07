@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useData, useAuth } from '../App';
 import { supabase } from '../supabaseClient'
 import DamageMap from '../components/DamageMap';
+import DeviceChecklist from '../components/DeviceChecklist';
+import { exportToCSV } from '../utils/exportUtils';
 import { 
   Users, 
   Wrench, 
@@ -16,7 +18,11 @@ import {
   Smartphone,
   Bot,
   Trash2,
-  PlusCircle
+  PlusCircle,
+  Tag,
+  Printer,
+  Download,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function Balcao() {
@@ -61,6 +67,8 @@ export default function Balcao() {
     condicao: '',
     problema: '',
     prioridade: 'Normal',
+    checklist: {},
+    senhaAparelho: '',
     isChatbot: false
   });
 
@@ -73,6 +81,108 @@ export default function Balcao() {
     endereco: ''
   });
 
+  const handlePrintThermalSticker = (os) => {
+    if (!os) return;
+    const client = clientes?.find(c => c.id === os.clienteId || c.id === os.id_cliente);
+    const clientName = client?.nome || 'Cliente Desconhecido';
+    const clientPhone = client?.telefone || '';
+    const dateStr = (os.dataEntrada || os.data_entrada)
+      ? new Date(os.dataEntrada || os.data_entrada).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+      : new Date().toLocaleString('pt-BR');
+
+    const checklistData = os.checklist || {};
+    const itemsEntries = Object.entries(checklistData);
+    const checklistSummary = itemsEntries.length > 0 
+      ? itemsEntries.map(([k, v]) => `${k.toUpperCase()}:${v === 'ok' ? 'OK' : v === 'defeito' ? 'DEF' : 'NT'}`).join(' ') 
+      : '';
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Etiqueta OS #${os.id}</title>
+          <style>
+            @page { size: 58mm auto; margin: 0; }
+            body {
+              font-family: Arial, Helvetica, sans-serif;
+              width: 54mm;
+              padding: 2mm;
+              margin: 0 auto;
+              font-size: 11px;
+              color: #000;
+              line-height: 1.2;
+            }
+            .title { text-align: center; font-size: 11px; font-weight: bold; border-bottom: 1px dashed #000; padding-bottom: 3px; margin-bottom: 4px; }
+            .os-badge { text-align: center; font-size: 22px; font-weight: 900; margin: 3px 0; letter-spacing: 1px; }
+            .barcode { font-family: monospace; letter-spacing: 3px; font-weight: bold; text-align: center; margin: 2px 0 6px 0; font-size: 12px; }
+            .row { margin-bottom: 3px; font-size: 11px; }
+            .label { font-weight: bold; font-size: 10px; text-transform: uppercase; }
+            .val { font-size: 11px; }
+            .highlight { background: #000; color: #fff; padding: 2px 5px; font-weight: 900; display: inline-block; border-radius: 3px; font-size: 11px; }
+            .footer-line { border-top: 1px dashed #000; margin-top: 6px; padding-top: 4px; text-align: center; font-size: 9px; }
+          </style>
+        </head>
+        <body>
+          <div class="title">CELL EXPRESS • BANCADA</div>
+          <div class="os-badge">OS #${os.id}</div>
+          <div class="barcode">*OS${os.id}*</div>
+          
+          <div class="row">
+            <span class="label">Cliente:</span> <span class="val"><strong>${clientName}</strong></span>
+          </div>
+          ${clientPhone ? `<div class="row"><span class="label">Tel:</span> <span class="val">${clientPhone}</span></div>` : ''}
+          
+          <div class="row">
+            <span class="label">Aparelho:</span> <span class="val"><strong>${os.modelo || os.tipo_aparelho}</strong></span>
+          </div>
+          
+          ${os.senha_aparelho ? `
+          <div class="row" style="margin: 4px 0;">
+            <span class="label">Senha / PIN:</span> <span class="highlight">${os.senha_aparelho}</span>
+          </div>` : ''}
+
+          <div class="row">
+            <span class="label">Defeito:</span> <span class="val">${os.problema || 'Não informado'}</span>
+          </div>
+
+          ${os.valor ? `
+          <div class="row">
+            <span class="label">Valor:</span> <span class="val"><strong>R$ ${Number(os.valor).toFixed(2)}</strong></span>
+          </div>` : ''}
+
+          ${checklistSummary ? `
+          <div class="row" style="font-size: 8px; color: #333; margin-top: 4px; border-top: 0.5px dotted #666; padding-top: 2px;">
+            ${checklistSummary}
+          </div>` : ''}
+
+          <div class="footer-line">
+            Entrada: ${dateStr}
+          </div>
+
+          <script>
+            window.onload = function() { window.print(); window.close(); }
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleExportClientes = () => {
+    const headers = ['ID', 'Nome', 'Telefone', 'Email', 'CPF', 'CEP', 'Endereco', 'Data Cadastro'];
+    const rows = (clientes || []).map(c => [
+      c.id,
+      c.nome,
+      c.telefone,
+      c.email || '',
+      c.cpf || '',
+      c.cep || '',
+      c.endereco || '',
+      c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : ''
+    ]);
+    exportToCSV('Clientes_CellExpress', headers, rows);
+    if (addAlerta) addAlerta('Lista de clientes exportada para Excel (.csv) com sucesso!', 'success');
+  };
   
   const handleDeleteClient = async (id) => {
     if (!window.confirm('Tem certeza que deseja apagar este cliente? Esta ação não pode ser desfeita.')) return;
@@ -160,6 +270,8 @@ export default function Balcao() {
       condicao: JSON.stringify(damageMarkers),
       problema: finalProblema,
       prioridade: finalPrioridade,
+      checklist: osForm.checklist || {},
+      senha_aparelho: osForm.senhaAparelho || '',
       status: 'na-fila',
       data_entrada: new Date().toISOString()
     };
@@ -186,8 +298,11 @@ export default function Balcao() {
       condicao: '',
       problema: '',
       prioridade: 'Normal',
+      checklist: {},
+      senhaAparelho: '',
       isChatbot: false
     });
+    setDamageMarkers([]);
   };
 
   const addToCart = (product) => {
@@ -770,6 +885,15 @@ export default function Balcao() {
               </div>
 
               <div className="form-group" style={{ marginBottom: '20px' }}>
+                <DeviceChecklist 
+                  value={osForm.checklist} 
+                  onChange={val => setOsForm(prev => ({ ...prev, checklist: val }))} 
+                  senha={osForm.senhaAparelho} 
+                  onSenhaChange={val => setOsForm(prev => ({ ...prev, senhaAparelho: val }))} 
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Condição do Aparelho (Mapa de Avarias)</label>
                 <DamageMap markers={damageMarkers} onChange={setDamageMarkers} />
               </div>
@@ -879,12 +1003,35 @@ export default function Balcao() {
       {/* Client List Modal */}
       {isClientListModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
-          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Clientes Cadastrados</h2>
-              <button onClick={() => setIsClientListModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
-                <X size={24} />
-              </button>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '850px', maxHeight: '85vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Clientes Cadastrados</h2>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary, #A0A0A0)' }}>Total: {clientes?.length || 0} clientes</span>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button 
+                  onClick={handleExportClientes}
+                  style={{
+                    backgroundColor: 'rgba(37, 211, 102, 0.15)',
+                    color: '#25D366',
+                    border: '1px solid rgba(37, 211, 102, 0.3)',
+                    padding: '8px 14px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Download size={15} /> Exportar Excel (.csv)
+                </button>
+                <button onClick={() => setIsClientListModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
+                  <X size={24} />
+                </button>
+              </div>
             </div>
             <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
@@ -920,7 +1067,7 @@ export default function Balcao() {
       {/* View OS Modal */}
       {viewOsData && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1001, padding: '20px' }}>
-          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '600px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+          <div className="card" style={{ backgroundColor: 'var(--bg-elevated, #1a1a1a)', padding: '25px', borderRadius: '8px', width: '100%', maxWidth: '650px', maxHeight: '90vh', overflowY: 'auto', border: '1px solid var(--border-color, #2a2a2a)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ margin: 0, color: 'var(--accent-color, #FFD700)' }}>Detalhes da OS #{viewOsData.id}</h2>
               <button onClick={() => setViewOsData(null)} style={{ background: 'none', border: 'none', color: 'var(--text-secondary, #A0A0A0)', cursor: 'pointer' }}>
@@ -933,6 +1080,15 @@ export default function Balcao() {
               <p><strong>Observações:</strong> {viewOsData.problema}</p>
               <p><strong>Status:</strong> {viewOsData.status}</p>
               <p><strong>Prioridade:</strong> {viewOsData.prioridade}</p>
+
+              <div style={{ marginTop: '10px', marginBottom: '10px' }}>
+                <DeviceChecklist 
+                  readOnly={true} 
+                  value={viewOsData.checklist || {}} 
+                  senha={viewOsData.senha_aparelho || ''} 
+                />
+              </div>
+
               <div style={{ marginTop: '10px', marginBottom: '10px' }}>
                 <p style={{ marginBottom: '5px' }}><strong>Condição / Avarias:</strong></p>
                 <DamageMap 
@@ -943,11 +1099,31 @@ export default function Balcao() {
 
               <p><strong>Data de Entrada:</strong> {new Date(viewOsData.dataEntrada || viewOsData.data_entrada).toLocaleString('pt-BR')}</p>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-              <button className="btn btn-danger" style={{ padding: '10px 20px', backgroundColor: 'var(--danger-color, #FF4444)', color: '#fff', border: 'none', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => handleDeleteOS(viewOsData.id)}>
-                <Trash2 size={16} style={{ marginRight: '5px' }} /> Apagar OS
-              </button>
-              <button className="btn btn-secondary" style={{ padding: '10px 20px', backgroundColor: 'transparent', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', cursor: 'pointer' }} onClick={() => setViewOsData(null)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  onClick={() => handlePrintThermalSticker(viewOsData)} 
+                  style={{ 
+                    padding: '8px 14px', 
+                    backgroundColor: '#FFD700', 
+                    color: '#000', 
+                    border: 'none', 
+                    borderRadius: '6px', 
+                    fontWeight: 'bold', 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '6px',
+                    fontSize: '13px'
+                  }}
+                >
+                  <Tag size={16} /> Etiqueta Térmica
+                </button>
+                <button className="btn btn-danger" style={{ padding: '8px 14px', backgroundColor: 'var(--danger-color, #FF4444)', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', fontSize: '13px' }} onClick={() => handleDeleteOS(viewOsData.id)}>
+                  <Trash2 size={16} style={{ marginRight: '5px' }} /> Apagar OS
+                </button>
+              </div>
+              <button className="btn btn-secondary" style={{ padding: '8px 16px', backgroundColor: 'transparent', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '6px', cursor: 'pointer' }} onClick={() => setViewOsData(null)}>
                 Fechar
               </button>
             </div>

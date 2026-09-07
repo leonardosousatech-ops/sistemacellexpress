@@ -2,9 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { useData, useAuth } from '../App';
 import { supabase } from '../supabaseClient';
 import EstoqueBot from '../components/EstoqueBot';
+import { exportToCSV } from '../utils/exportUtils';
 import { 
   Package, Search, Plus, Edit2, Trash2, AlertTriangle, 
-  ArrowUpRight, ArrowDownRight, Archive, Box, Filter, Flame
+  ArrowUpRight, ArrowDownRight, Archive, Box, Filter, Flame, Download
 } from 'lucide-react';
 
 // Format currency
@@ -46,6 +47,23 @@ export default function Estoque() {
     quantidade: 1,
     motivo: ''
   });
+
+  const handleExportEstoque = () => {
+    const headers = ['ID', 'Produto / Item', 'Categoria', 'Quantidade', 'Estoque Mínimo', 'Preço Custo (R$)', 'Preço Venda PIX (R$)', 'Preço Cartão (R$)', 'Usa Separadora'];
+    const rows = estoque.map(i => [
+      i.id,
+      i.nome,
+      i.categoria === 'peça' || i.categoria === 'peca' ? 'Peça' : 'Produto',
+      i.quantidade,
+      i.estoque_minimo || i.quantidade_minima || 0,
+      Number(i.preco_custo || 0).toFixed(2),
+      Number(i.preco_venda || 0).toFixed(2),
+      Number(i.preco_credito || (i.preco_venda ? i.preco_venda * 1.15 : 0)).toFixed(2),
+      i.precisa_aquecer ? 'Sim' : 'Não'
+    ]);
+    exportToCSV('Estoque_CellExpress', headers, rows);
+    if (addAlerta) addAlerta('Planilha de Estoque exportada com sucesso!', 'success');
+  };
 
   // Check if current logged-in user has management/higher role permission
   const isCargoMaior = useMemo(() => {
@@ -230,7 +248,10 @@ export default function Estoque() {
     <div className="page-container" style={{ padding: '20px' }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Package /> Estoque</h1>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={handleExportEstoque} title="Exportar tabela para Excel / CSV">
+            <Download size={18} /> Exportar Excel
+          </button>
           <button className="btn btn-secondary" onClick={() => setIsMovModalOpen(true)}>
             <ArrowUpRight size={18} /> Movimentação
           </button>

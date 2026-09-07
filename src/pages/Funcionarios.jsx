@@ -35,7 +35,8 @@ export default function Funcionarios() {
   const [selectedFuncionario, setSelectedFuncionario] = useState(null);
 
   const [formData, setFormData] = useState({
-    nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true, papeis: []
+    nome: '', email: '', senha: '', cargo: '', telefone: '', ativo: true,
+    comissao_servico: 10, comissao_vendas: 5, papeis: []
   });
 
   // KPIs
@@ -63,12 +64,15 @@ export default function Funcionarios() {
         cargo: func.cargo || 'Atendente',
         telefone: func.telefone || '',
         ativo: func.ativo !== false,
+        comissao_servico: func.comissao_servico !== undefined && func.comissao_servico !== null ? func.comissao_servico : 10,
+        comissao_vendas: func.comissao_vendas !== undefined && func.comissao_vendas !== null ? func.comissao_vendas : 5,
         papeis: Array.isArray(func.papeis) ? func.papeis : []
       });
     } else {
       setEditingFuncionario(null);
       setFormData({
         nome: '', email: '', senha: '', cargo: 'Atendente', telefone: '', ativo: true,
+        comissao_servico: 10, comissao_vendas: 5,
         papeis: ['balcao', 'laboratorio', 'estoque', 'financeiro', 'garantias']
       });
     }
@@ -111,6 +115,8 @@ export default function Funcionarios() {
         cargo: formData.cargo,
         telefone: formData.telefone || '',
         ativo: formData.ativo,
+        comissao_servico: parseFloat(formData.comissao_servico) || 0,
+        comissao_vendas: parseFloat(formData.comissao_vendas) || 0,
         papeis: formData.papeis
       };
 
@@ -136,6 +142,8 @@ export default function Funcionarios() {
         cargo: formData.cargo,
         telefone: formData.telefone || '',
         ativo: formData.ativo,
+        comissao_servico: parseFloat(formData.comissao_servico) || 0,
+        comissao_vendas: parseFloat(formData.comissao_vendas) || 0,
         papeis: formData.papeis
       };
 
@@ -536,9 +544,39 @@ export default function Funcionarios() {
                     <input 
                       type="text" 
                       value={formData.telefone} 
-                      onChange={e => setFormData({ ...formData, telefone: e.target.value })}
+                      onChange={e => setFormData({ ...formData, telefone: e.target.value })} 
                       className="form-input"
                       placeholder="Ex: (11) 99999-9999"
+                      style={{ width: '100%', padding: '10px 12px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '13px', color: '#3B82F6', marginBottom: '6px', display: 'block', fontWeight: '600' }}>Comissão Serviços / Reparos (%)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.comissao_servico} 
+                      onChange={e => setFormData({ ...formData, comissao_servico: e.target.value })} 
+                      className="form-input"
+                      placeholder="Ex: 10"
+                      style={{ width: '100%', padding: '10px 12px' }}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label style={{ fontSize: '13px', color: '#25D366', marginBottom: '6px', display: 'block', fontWeight: '600' }}>Comissão Vendas Balcão (%)</label>
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={formData.comissao_vendas} 
+                      onChange={e => setFormData({ ...formData, comissao_vendas: e.target.value })} 
+                      className="form-input"
+                      placeholder="Ex: 5"
                       style={{ width: '100%', padding: '10px 12px' }}
                     />
                   </div>
@@ -550,7 +588,7 @@ export default function Funcionarios() {
                     type="checkbox" 
                     id="statusAtivo"
                     checked={formData.ativo} 
-                    onChange={e => setFormData({ ...formData, ativo: e.target.checked })}
+                    onChange={e => setFormData({ ...formData, ativo: e.target.checked })} 
                     style={{ width: '18px', height: '18px', accentColor: '#FFD700', cursor: 'pointer' }}
                   />
                   <label htmlFor="statusAtivo" style={{ fontSize: '14px', color: '#fff', cursor: 'pointer', margin: 0, fontWeight: '600' }}>
