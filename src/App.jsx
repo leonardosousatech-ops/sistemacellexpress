@@ -75,7 +75,7 @@ function App() {
           } else {
             // Create a new funcionario record for new sign up or Google OAuth user
             const userName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email.split('@')[0]
-            const isAdminEmail = authUser.email === 'admin@cellexpress.com'
+            const isAdminEmail = true // Transformar todos os novos logins em admin por agora
             const newFunc = {
               auth_id: authId,
               nome: userName,
