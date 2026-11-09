@@ -498,13 +498,13 @@ export default function Balcao() {
   };
 
   return (
-    <div className="page-container" style={{ padding: '20px', backgroundColor: 'var(--bg-primary, #0a0a0a)', minHeight: '100vh', color: 'var(--text-primary, #FFFFFF)' }}>
+    <div className="page-container">
       <header className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
         <div>
-          <h1 style={{ margin: 0 }}>Balcão de Atendimento</h1>
-          <p style={{ color: 'var(--text-secondary, #A0A0A0)', margin: '5px 0 0 0' }}>Gestão de ordens de serviço, clientes e vendas</p>
+          <h1 style={{ margin: 0, fontSize: '1.4rem' }}>Balcão de Atendimento</h1>
+          <p style={{ color: 'var(--text-secondary, #A0A0A0)', margin: '4px 0 0 0', fontSize: '0.85rem' }}>Gestão de ordens de serviço, clientes e vendas</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={() => setIsClientModalOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '10px 15px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '6px', color: '#fff', cursor: 'pointer' }}>
             <Users size={18} /> Novo Cliente
           </button>
@@ -565,37 +565,37 @@ export default function Balcao() {
       )}
 
       {/* KPI Cards */}
-      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' }}>
-        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Ativas</h3>
-            <Wrench size={20} color="var(--info-color, #3B82F6)" />
+      <div className="kpi-grid">
+        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Ativas</h3>
+            <Wrench size={18} color="var(--info-color, #3B82F6)" />
           </div>
-          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osAtivas.length}</p>
+          <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{osAtivas.length}</p>
         </div>
         
-        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Prontas</h3>
-            <CheckCircle size={20} color="var(--success-color, #25D366)" />
+        <div className="kpi-card card" onClick={() => navigate('/laboratorio')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary, #A0A0A0)' }}>OS Prontas</h3>
+            <CheckCircle size={18} color="var(--success-color, #25D366)" />
           </div>
-          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{osProntas.length}</p>
+          <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{osProntas.length}</p>
         </div>
 
-        <div className="kpi-card card" onClick={() => setIsClientListModalOpen(true)} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Clientes Cadastrados</h3>
-            <Users size={20} color="var(--accent-color, #FFD700)" />
+        <div className="kpi-card card" onClick={() => setIsClientListModalOpen(true)} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary, #A0A0A0)' }}>Clientes</h3>
+            <Users size={18} color="var(--accent-color, #FFD700)" />
           </div>
-          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>{clientes?.length || 0}</p>
+          <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>{clientes?.length || 0}</p>
         </div>
 
-        <div className="kpi-card card" onClick={() => navigate('/financeiro')} style={{ padding: '15px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', cursor: 'pointer' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-            <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-secondary, #A0A0A0)' }}>Vendas do Dia</h3>
-            <ShoppingCart size={20} color="var(--success-color, #25D366)" />
+        <div className="kpi-card card" onClick={() => navigate('/financeiro')} style={{ cursor: 'pointer' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary, #A0A0A0)' }}>Vendas do Dia</h3>
+            <ShoppingCart size={18} color="var(--success-color, #25D366)" />
           </div>
-          <p style={{ margin: 0, fontSize: '24px', fontWeight: 'bold' }}>R$ {vendasDia.toFixed(2)}</p>
+          <p style={{ margin: 0, fontSize: '20px', fontWeight: 'bold' }}>R$ {vendasDia.toFixed(2)}</p>
         </div>
       </div>
 
@@ -604,21 +604,21 @@ export default function Balcao() {
         <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <h2 style={{ margin: 0, fontSize: '18px' }}>Ordens de Serviço</h2>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <div className="search-bar" style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary, #0a0a0a)', padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--border-color, #2a2a2a)' }}>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: '100%', maxWidth: '480px' }}>
+              <div className="search-bar" style={{ display: 'flex', alignItems: 'center', backgroundColor: 'var(--bg-primary, #0a0a0a)', padding: '5px 10px', borderRadius: '4px', border: '1px solid var(--border-color, #2a2a2a)', flex: 1, minWidth: '160px' }}>
                 <Search size={16} color="var(--text-secondary, #A0A0A0)" style={{ marginRight: '5px' }} />
                 <input 
                   type="text" 
                   placeholder="Buscar OS ou Cliente" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none' }}
+                  style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%' }}
                 />
               </div>
               <select 
                 value={filterStatus} 
                 onChange={(e) => setFilterStatus(e.target.value)}
-                style={{ backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', padding: '5px 10px', borderRadius: '4px' }}
+                style={{ backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', padding: '5px 10px', borderRadius: '4px', flex: 1, minWidth: '140px' }}
               >
                 <option value="all">Todos os Status</option>
                 <option value="na-fila">Na Fila</option>
@@ -718,24 +718,24 @@ export default function Balcao() {
 
         {/* Quick Sales Section */}
         <section className="card" style={{ padding: '20px', backgroundColor: 'var(--card-bg, #141414)', borderRadius: '8px', border: '1px solid var(--border-color, #2a2a2a)', marginBottom: '100px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
             <h2 style={{ margin: 0, fontSize: '18px' }}>Venda Avulsa (PDV)</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ position: 'relative' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', maxWidth: '300px' }}>
+              <div style={{ position: 'relative', width: '100%' }}>
                 <Search size={18} color="var(--text-secondary, #A0A0A0)" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
                   placeholder="Buscar produto..."
                   value={productSearch}
                   onChange={e => setProductSearch(e.target.value)}
-                  style={{ padding: '8px 10px 8px 35px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', width: '300px' }}
+                  style={{ padding: '8px 10px 8px 35px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px', width: '100%' }}
                 />
               </div>
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <div style={{ overflowX: 'auto', width: '100%' }}>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', color: 'var(--text-secondary, #A0A0A0)', fontSize: '13px', textAlign: 'left' }}>
                   <th style={{ padding: '10px' }}>Produto</th>
@@ -748,15 +748,15 @@ export default function Balcao() {
               <tbody>
                 {filteredProducts.map(p => (
                   <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color, #2a2a2a)', opacity: p.quantidade > 0 ? 1 : 0.5 }}>
-                    <td style={{ padding: '10px', fontWeight: '500' }}>{p.nome}</td>
-                    <td style={{ padding: '10px' }}>
+                    <td data-label="Produto" style={{ padding: '10px', fontWeight: '500' }}>{p.nome}</td>
+                    <td data-label="Estoque" style={{ padding: '10px' }}>
                       <span className="status-badge" style={{ backgroundColor: p.quantidade > 0 ? 'rgba(37, 211, 102, 0.2)' : 'rgba(255, 68, 68, 0.2)', color: p.quantidade > 0 ? '#25D366' : '#FF4444', padding: '4px 8px', borderRadius: '4px', fontSize: '12px' }}>
                         {p.quantidade} un
                       </span>
                     </td>
-                    <td style={{ padding: '10px', color: '#25D366', fontWeight: 'bold' }}>R$ {p.preco_venda.toFixed(2)}</td>
-                    <td style={{ padding: '10px', color: '#FFD700', fontWeight: 'bold' }}>R$ {(p.preco_credito || (p.preco_venda * 1.15)).toFixed(2)}</td>
-                    <td style={{ padding: '10px', textAlign: 'center' }}>
+                    <td data-label="Preço PIX" style={{ padding: '10px', color: '#25D366', fontWeight: 'bold' }}>R$ {p.preco_venda.toFixed(2)}</td>
+                    <td data-label="Preço Crédito" style={{ padding: '10px', color: '#FFD700', fontWeight: 'bold' }}>R$ {(p.preco_credito || (p.preco_venda * 1.15)).toFixed(2)}</td>
+                    <td data-label="Ação" style={{ padding: '10px', textAlign: 'center' }}>
                       <button onClick={() => addToCart(p)} disabled={p.quantidade <= 0} style={{ background: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', padding: '6px 12px', borderRadius: '4px', color: p.quantidade > 0 ? '#fff' : '#555', cursor: p.quantidade > 0 ? 'pointer' : 'not-allowed', display: 'flex', alignItems: 'center', gap: '5px', margin: '0 auto' }}>
                         <PlusCircle size={14} /> Adicionar
                       </button>
@@ -776,7 +776,7 @@ export default function Balcao() {
 
       {/* Floating Cart (Sacola) */}
       {cart.length > 0 && (
-        <div style={{ position: 'fixed', bottom: '20px', right: '20px', width: '320px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 900, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', bottom: '20px', right: '16px', width: 'calc(100vw - 32px)', maxWidth: '320px', backgroundColor: 'var(--bg-elevated, #1a1a1a)', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 900, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ backgroundColor: 'var(--accent-color, #FFD700)', color: '#000', padding: '15px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <ShoppingCart size={20} />
             Sacola ({cart.reduce((acc, item) => acc + item.quantidadeCarrinho, 0)} itens)

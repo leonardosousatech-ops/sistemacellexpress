@@ -245,9 +245,9 @@ export default function Estoque() {
   };
 
   return (
-    <div className="page-container" style={{ padding: '20px' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><Package /> Estoque</h1>
+    <div className="page-container">
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '15px' }}>
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.4rem' }}><Package /> Estoque</h1>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={handleExportEstoque} title="Exportar tabela para Excel / CSV">
             <Download size={18} /> Exportar Excel
@@ -262,37 +262,37 @@ export default function Estoque() {
       </header>
 
       {/* KPIs */}
-      <div className="kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+      <div className="kpi-grid" style={{ marginBottom: '20px' }}>
         <div className="card kpi-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-secondary, #A0A0A0)' }}>
             <Archive /> <h3>Total de Itens</h3>
           </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold' }}>{kpis.totalItens}</p>
+          <p style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: '6px 0 0 0' }}>{kpis.totalItens}</p>
         </div>
         <div className="card kpi-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--info, #3B82F6)' }}>
             <Package /> <h3>Peças p/ Reparo</h3>
           </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold' }}>{kpis.pecas}</p>
+          <p style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: '6px 0 0 0' }}>{kpis.pecas}</p>
         </div>
         <div className="card kpi-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--success, #25D366)' }}>
             <Box /> <h3>Produtos p/ Venda</h3>
           </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold' }}>{kpis.produtos}</p>
+          <p style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: '6px 0 0 0' }}>{kpis.produtos}</p>
         </div>
         <div className="card kpi-card">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--danger, #FF4444)' }}>
             <AlertTriangle /> <h3>Estoque Baixo</h3>
           </div>
-          <p style={{ fontSize: '2rem', fontWeight: 'bold' }}>{kpis.estoqueBaixo}</p>
+          <p style={{ fontSize: '1.8rem', fontWeight: 'bold', margin: '6px 0 0 0' }}>{kpis.estoqueBaixo}</p>
         </div>
       </div>
 
       {/* Filters and Search */}
       <div className="card" style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', gap: '10px', overflowX: 'auto' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', maxWidth: '100%', paddingBottom: '4px' }}>
             <button className={`btn ${filter === 'todos' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter('todos')}>Todos</button>
             <button className={`btn ${filter === 'pecas' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter('pecas')}>Peças</button>
             <button className={`btn ${filter === 'produtos' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setFilter('produtos')}>Produtos</button>
@@ -300,22 +300,22 @@ export default function Estoque() {
               Estoque Baixo
             </button>
           </div>
-          <div className="form-group" style={{ position: 'relative', margin: 0, minWidth: '250px' }}>
-            <Search style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-secondary, #A0A0A0)' }} size={20} />
+          <div className="form-group" style={{ position: 'relative', margin: 0, width: '100%', maxWidth: '320px', minWidth: 0 }}>
+            <Search style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary, #A0A0A0)' }} size={18} />
             <input 
               type="text" 
               placeholder="Buscar item..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '40px', width: '100%', height: '100%' }}
+              style={{ paddingLeft: '35px', width: '100%', padding: '8px 10px 8px 35px' }}
             />
           </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className="card" style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+      <div className="card" style={{ overflowX: 'auto', width: '100%' }}>
+        <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border, #2a2a2a)' }}>
               <th style={{ padding: '15px' }}>Produto</th>

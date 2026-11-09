@@ -476,11 +476,13 @@ export default function EstoqueBot() {
       {isOpen && (
         <div style={{
           position: 'fixed',
-          bottom: '30px',
-          right: '30px',
-          width: '380px',
+          bottom: '16px',
+          right: '16px',
+          width: 'calc(100vw - 32px)',
+          maxWidth: '380px',
           height: '550px',
-          backgroundColor: 'rgba(26, 26, 26, 0.75)',
+          maxHeight: 'calc(100vh - 100px)',
+          backgroundColor: 'rgba(26, 26, 26, 0.95)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           borderRadius: '16px',
