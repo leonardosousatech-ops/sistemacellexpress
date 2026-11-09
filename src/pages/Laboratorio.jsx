@@ -27,8 +27,7 @@ const KANBAN_COLUMNS = [
   { key: 'em-analise', label: 'Em Análise', color: '#FFAA00', icon: Search, bg: 'rgba(255, 170, 0, 0.12)', border: 'rgba(255, 170, 0, 0.3)' },
   { key: 'aguardando-peca', label: 'Aguardando Peça', color: '#FF4444', icon: AlertCircle, bg: 'rgba(255, 68, 68, 0.12)', border: 'rgba(255, 68, 68, 0.3)' },
   { key: 'em-reparo', label: 'Em Reparo', color: '#A855F7', icon: Wrench, bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.3)' },
-  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.12)', border: 'rgba(37, 211, 102, 0.3)' },
-  { key: 'desistencia', label: 'Desistência', color: '#EF4444', icon: Ban, bg: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.3)' }
+  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.12)', border: 'rgba(37, 211, 102, 0.3)' }
 ]
 
 const NEXT_STATUS = {
@@ -82,10 +81,10 @@ export default function Laboratorio() {
 
   const getClientName = (id) => clientes.find(c => c.id === id)?.nome || 'Cliente Desconhecido'
 
-  // Filtered OS by search query (ignoring delivered by default)
+  // Filtered OS by search query (ignoring delivered and desistencia from the active queue / Kanban)
   const activeOS = useMemo(() => {
     return ordensServico
-      .filter(os => os.status !== 'entregue')
+      .filter(os => os.status !== 'entregue' && os.status !== 'desistencia')
       .filter(os => {
         if (!searchTerm) return true
         const term = searchTerm.toLowerCase()
@@ -106,8 +105,11 @@ export default function Laboratorio() {
   // Filtered for traditional Grid view
   const gridFilteredOS = useMemo(() => {
     if (filterTab === 'todos') return activeOS
+    if (filterTab === 'desistencia') {
+      return ordensServico.filter(os => os.status === 'desistencia')
+    }
     return activeOS.filter(os => os.status === filterTab)
-  }, [activeOS, filterTab])
+  }, [activeOS, filterTab, ordensServico])
 
   // Fetch iFixit guides
   const fetchIfixit = async (modelo) => {
@@ -377,11 +379,11 @@ export default function Laboratorio() {
         setEstoque(estoqueAtualizado)
       }
 
-      // 4. Atualizar estados locais
+      // 4. Atualizar estados locais e remover da fila
       const updatedOS = { ...desistenciaOS, ...updates }
       setOrdensServico(prev => prev.map(os => os.id === desistenciaOS.id ? updatedOS : os))
       if (selectedOS && selectedOS.id === desistenciaOS.id) {
-        setSelectedOS(updatedOS)
+        setSelectedOS(null)
       }
 
       if (addAtividade) {
@@ -393,7 +395,7 @@ export default function Laboratorio() {
       }
 
       if (addAlerta) {
-        addAlerta(`Desistência da OS #${desistenciaOS.id} registrada! Valor das peças (R$ ${vPecas.toFixed(2)}) e conserto (R$ ${vReparo.toFixed(2)}) salvos como sugestão no banco.`, 'success')
+        addAlerta(`Desistência da OS #${desistenciaOS.id} registrada! Dados gravados no banco e OS removida da fila.`, 'success')
       }
 
       setDesistenciaOS(null)
@@ -837,6 +839,29 @@ export default function Laboratorio() {
               <MessageCircle size={12} />
             </button>
 
+            {/* Botão rápido de Desistência */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openDesistenciaModal(os)
+              }}
+              title="Registrar desistência do cliente e remover da fila"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '4px',
+                padding: '3px 6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontSize: '11px'
+              }}
+            >
+              <Ban size={12} />
+            </button>
+
             {/* Advance button */}
             {NEXT_STATUS[os.status] && (
               <button
@@ -965,6 +990,30 @@ export default function Laboratorio() {
               }}
             >
               <MessageCircle size={13} /> WhatsApp
+            </button>
+
+            {/* Botão de Desistência na Lista */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openDesistenciaModal(os)
+              }}
+              title="Registrar Desistência e remover da fila"
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                padding: '5px 10px',
+                borderRadius: '6px',
+                fontSize: '0.78rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <Ban size={13} /> Desistência
             </button>
 
             {NEXT_STATUS[os.status] && (
