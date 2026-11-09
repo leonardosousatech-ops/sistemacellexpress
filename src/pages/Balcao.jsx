@@ -24,7 +24,9 @@ import {
   Printer,
   Download,
   ShieldCheck,
-  MessageCircle
+  MessageCircle,
+  Sparkles,
+  Ban
 } from 'lucide-react';
 
 export default function Balcao() {
@@ -38,7 +40,8 @@ export default function Balcao() {
     setEstoque,
     setFinanceiro,
     addAtividade, 
-    addAlerta 
+    addAlerta,
+    sugestoesOrcamento
   } = useData();
   
   // const { user } = useAuth(); // If needed for context
@@ -68,11 +71,62 @@ export default function Balcao() {
     modelo: '',
     condicao: '',
     problema: '',
+    valor: '',
     prioridade: 'Normal',
     checklist: {},
     senhaAparelho: '',
     isChatbot: false
   });
+
+  // Sugestão Inteligente de Preço para o Balcão baseada em orçamentos e desistências no DB
+  const balcaoSuggestion = useMemo(() => {
+    if (!osForm.modelo || osForm.modelo.trim().length < 2) return null;
+    const term = osForm.modelo.toLowerCase().trim();
+    const matchesSugestoes = (sugestoesOrcamento || []).filter(s => 
+      s.modelo && (s.modelo.toLowerCase().includes(term) || term.includes(s.modelo.toLowerCase()))
+    );
+    const matchesOS = (ordensServico || []).filter(os =>
+      os.modelo && 
+      (os.modelo.toLowerCase().includes(term) || term.includes(os.modelo.toLowerCase())) &&
+      (Number(os.valor) > 0 || Number(os.valor_pecas) > 0)
+    );
+
+    const total = matchesSugestoes.length + matchesOS.length;
+    if (total === 0) return null;
+
+    let sumReparo = 0;
+    let countReparo = 0;
+    let sumPecas = 0;
+    let countPecas = 0;
+
+    matchesSugestoes.forEach(s => {
+      if (Number(s.valor_reparo) > 0) {
+        sumReparo += Number(s.valor_reparo);
+        countReparo++;
+      }
+      if (Number(s.valor_pecas) > 0) {
+        sumPecas += Number(s.valor_pecas);
+        countPecas++;
+      }
+    });
+
+    matchesOS.forEach(o => {
+      if (Number(o.valor) > 0) {
+        sumReparo += Number(o.valor);
+        countReparo++;
+      }
+      if (Number(o.valor_pecas) > 0) {
+        sumPecas += Number(o.valor_pecas);
+        countPecas++;
+      }
+    });
+
+    return {
+      count: total,
+      avgReparo: countReparo > 0 ? (sumReparo / countReparo) : 0,
+      avgPecas: countPecas > 0 ? (sumPecas / countPecas) : 0
+    };
+  }, [osForm.modelo, sugestoesOrcamento, ordensServico]);
 
   const [clientForm, setClientForm] = useState({
     nome: '',
@@ -274,6 +328,7 @@ export default function Balcao() {
       prioridade: finalPrioridade,
       checklist: osForm.checklist || {},
       senha_aparelho: osForm.senhaAparelho || '',
+      valor: osForm.valor ? parseFloat(osForm.valor) : null,
       status: 'na-fila',
       data_entrada: new Date().toISOString()
     };
@@ -299,6 +354,7 @@ export default function Balcao() {
       modelo: '',
       condicao: '',
       problema: '',
+      valor: '',
       prioridade: 'Normal',
       checklist: {},
       senhaAparelho: '',
@@ -429,7 +485,7 @@ export default function Balcao() {
     if (s.includes('pronto')) return 'badge-success';
     if (s.includes('aguardando')) return 'badge-warning';
     if (s.includes('bancada')) return 'badge-info';
-    if (s.includes('cancelado')) return 'badge-danger';
+    if (s.includes('cancelado') || s.includes('desistencia')) return 'badge-danger';
     return 'badge-neutral';
   };
 
@@ -565,9 +621,12 @@ export default function Balcao() {
                 style={{ backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', padding: '5px 10px', borderRadius: '4px' }}
               >
                 <option value="all">Todos os Status</option>
-                <option value="aguardando avaliação">Aguardando Avaliação</option>
-                <option value="na bancada">Na Bancada</option>
+                <option value="na-fila">Na Fila</option>
+                <option value="em-analise">Em Análise</option>
+                <option value="aguardando-peca">Aguardando Peça</option>
+                <option value="em-reparo">Em Reparo</option>
                 <option value="pronto">Pronto</option>
+                <option value="desistencia">Desistência</option>
                 <option value="concluido">Concluído</option>
               </select>
             </div>
@@ -914,6 +973,60 @@ export default function Balcao() {
                   placeholder="Ex: iPhone 13 Pro Max"
                   style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
                 />
+
+                {/* Sugestão de Preço do DB */}
+                {balcaoSuggestion && (
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(255, 215, 0, 0.08)',
+                    border: '1px solid rgba(255, 215, 0, 0.3)',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    fontSize: '0.82rem'
+                  }}>
+                    <div>
+                      <span style={{ color: 'var(--accent-yellow, #FFD700)', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Sparkles size={14} /> Sugestão de Preço ({balcaoSuggestion.count} no DB)
+                      </span>
+                      <div style={{ color: '#ccc', marginTop: '2px', fontSize: '0.78rem' }}>
+                        Reparo: <strong style={{ color: '#fff' }}>R$ {balcaoSuggestion.avgReparo.toFixed(2)}</strong> | Peças: <strong style={{ color: '#FFAA00' }}>R$ {balcaoSuggestion.avgPecas.toFixed(2)}</strong>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOsForm({ ...osForm, valor: balcaoSuggestion.avgReparo.toFixed(2) })}
+                      style={{
+                        padding: '4px 8px',
+                        backgroundColor: 'var(--accent-yellow, #FFD700)',
+                        color: '#000',
+                        border: 'none',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Usar R$ {balcaoSuggestion.avgReparo.toFixed(2)}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '15px' }}>
+                <label style={{ display: 'block', marginBottom: '5px', color: 'var(--text-secondary, #A0A0A0)' }}>Valor Estimado / Orçamento (R$)</label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="form-input" 
+                  value={osForm.valor || ''} 
+                  onChange={(e) => setOsForm({...osForm, valor: e.target.value})}
+                  placeholder="R$ 0.00 (Opcional - pode ser definido no Laboratório)"
+                  style={{ width: '100%', padding: '10px', backgroundColor: 'var(--bg-primary, #0a0a0a)', color: '#fff', border: '1px solid var(--border-color, #2a2a2a)', borderRadius: '4px' }}
+                />
               </div>
 
               <div className="form-group" style={{ marginBottom: '15px' }}>
@@ -1123,8 +1236,17 @@ export default function Balcao() {
               <p><strong>Cliente:</strong> {clientes?.find(c => c.id === viewOsData.clienteId || c.id === viewOsData.id_cliente)?.nome || 'Desconhecido'}</p>
               <p><strong>Aparelho:</strong> {viewOsData.modelo || viewOsData.tipo_aparelho}</p>
               <p><strong>Observações:</strong> {viewOsData.problema}</p>
-              <p><strong>Status:</strong> {viewOsData.status}</p>
+              <p><strong>Status:</strong> <span style={{ textTransform: 'capitalize' }}>{viewOsData.status}</span></p>
               <p><strong>Prioridade:</strong> {viewOsData.prioridade}</p>
+              {viewOsData.valor && (
+                <p><strong>Valor do Orçamento:</strong> <span style={{ color: 'var(--accent-color, #FFD700)', fontWeight: 'bold' }}>R$ {Number(viewOsData.valor).toFixed(2)}</span></p>
+              )}
+              {viewOsData.status === 'desistencia' && (
+                <div style={{ padding: '10px 14px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', margin: '4px 0' }}>
+                  <p style={{ color: '#EF4444', fontWeight: 'bold', margin: '0 0 4px 0' }}>🚫 Registro de Desistência: {viewOsData.motivo_desistencia || 'Não informado'}</p>
+                  <p style={{ margin: 0, fontSize: '0.85rem' }}>Valor das Peças: <strong>R$ {Number(viewOsData.valor_pecas || 0).toFixed(2)}</strong> | Reparo Cotado: <strong>R$ {Number(viewOsData.valor || 0).toFixed(2)}</strong></p>
+                </div>
+              )}
 
               <div style={{ marginTop: '10px', marginBottom: '10px' }}>
                 <DeviceChecklist 

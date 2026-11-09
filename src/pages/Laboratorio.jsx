@@ -9,7 +9,7 @@ import {
   Wrench, AlertCircle, Clock, CheckCircle, Search,
   Settings, ExternalLink, Plus, X, Play, Pause, ChevronRight, Printer, Flame, Trash2,
   Kanban, LayoutGrid, DollarSign, Package, ArrowRight, Layers, Rows3, Columns3, Check,
-  Tag, Download, ShieldCheck, MessageCircle
+  Tag, Download, ShieldCheck, MessageCircle, Ban, Sparkles, Undo2
 } from 'lucide-react'
 
 const STATUS_LABELS = {
@@ -18,7 +18,8 @@ const STATUS_LABELS = {
   'aguardando-peca': 'Aguardando Peça',
   'em-reparo': 'Em Reparo',
   'pronto': 'Pronto',
-  'entregue': 'Entregue'
+  'entregue': 'Entregue',
+  'desistencia': 'Desistência'
 }
 
 const KANBAN_COLUMNS = [
@@ -26,7 +27,8 @@ const KANBAN_COLUMNS = [
   { key: 'em-analise', label: 'Em Análise', color: '#FFAA00', icon: Search, bg: 'rgba(255, 170, 0, 0.12)', border: 'rgba(255, 170, 0, 0.3)' },
   { key: 'aguardando-peca', label: 'Aguardando Peça', color: '#FF4444', icon: AlertCircle, bg: 'rgba(255, 68, 68, 0.12)', border: 'rgba(255, 68, 68, 0.3)' },
   { key: 'em-reparo', label: 'Em Reparo', color: '#A855F7', icon: Wrench, bg: 'rgba(168, 85, 247, 0.12)', border: 'rgba(168, 85, 247, 0.3)' },
-  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.12)', border: 'rgba(37, 211, 102, 0.3)' }
+  { key: 'pronto', label: 'Prontos', color: '#25D366', icon: CheckCircle, bg: 'rgba(37, 211, 102, 0.12)', border: 'rgba(37, 211, 102, 0.3)' },
+  { key: 'desistencia', label: 'Desistência', color: '#EF4444', icon: Ban, bg: 'rgba(239, 68, 68, 0.12)', border: 'rgba(239, 68, 68, 0.3)' }
 ]
 
 const NEXT_STATUS = {
@@ -39,7 +41,7 @@ const NEXT_STATUS = {
 const PRIORITY_ORDER = { urgente: 1, alta: 2, normal: 3, baixa: 4 }
 
 export default function Laboratorio() {
-  const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta, setFinanceiro } = useData()
+  const { ordensServico, setOrdensServico, clientes, estoque, setEstoque, addAtividade, addAlerta, setFinanceiro, sugestoesOrcamento, setSugestoesOrcamento } = useData()
   const { user } = useAuth()
 
   // viewMode: 'sections' (1 Coluna em seções verticais - estilo Image 1) | 'kanban' (Grade 2x2 no celular / colunas) | 'grid' (Abas/Grade)
@@ -57,6 +59,16 @@ export default function Laboratorio() {
   const [esquemaUrlInput, setEsquemaUrlInput] = useState('')
   const [valorInput, setValorInput] = useState('')
 
+  // Estado para Modal de Desistência
+  const [desistenciaOS, setDesistenciaOS] = useState(null)
+  const [desistenciaForm, setDesistenciaForm] = useState({
+    valorPecas: '',
+    valorReparo: '',
+    motivo: 'Cliente achou o valor alto / desistiu',
+    devolverEstoque: true
+  })
+  const [savingDesistencia, setSavingDesistencia] = useState(false)
+
   const today = new Date().toISOString().split('T')[0]
 
   // KPIs
@@ -64,7 +76,8 @@ export default function Laboratorio() {
     naFila: ordensServico.filter(os => os.status === 'na-fila').length,
     emAndamento: ordensServico.filter(os => ['em-analise', 'em-reparo'].includes(os.status)).length,
     aguardando: ordensServico.filter(os => os.status === 'aguardando-peca').length,
-    concluidasHoje: ordensServico.filter(os => os.status === 'pronto' && os.data_conclusao?.startsWith(today)).length
+    concluidasHoje: ordensServico.filter(os => os.status === 'pronto' && os.data_conclusao?.startsWith(today)).length,
+    desistencias: ordensServico.filter(os => os.status === 'desistencia').length
   }), [ordensServico, today])
 
   const getClientName = (id) => clientes.find(c => c.id === id)?.nome || 'Cliente Desconhecido'
@@ -153,6 +166,10 @@ export default function Laboratorio() {
   // Generalized status updater
   const handleUpdateStatus = async (newStatus, targetOS = selectedOS) => {
     if (!targetOS) return
+    if (newStatus === 'desistencia') {
+      openDesistenciaModal(targetOS)
+      return
+    }
     const updates = { status: newStatus }
     if (newStatus === 'pronto') {
       const now = new Date()
@@ -209,6 +226,11 @@ export default function Laboratorio() {
     const targetOS = ordensServico.find(os => os.id === Number(osId))
     if (!targetOS || targetOS.status === targetStatus) return
 
+    if (targetStatus === 'desistencia') {
+      openDesistenciaModal(targetOS)
+      return
+    }
+
     await handleUpdateStatus(targetStatus, targetOS)
   }
 
@@ -260,9 +282,10 @@ export default function Laboratorio() {
     if (addAlerta) addAlerta('Esquema elétrico salvo com sucesso!', 'success')
   }
 
-  const handleSaveValor = async () => {
+  const handleSaveValor = async (valorOverride = null) => {
     if (!selectedOS) return
-    const novoValor = parseFloat(valorInput)
+    const valorToUse = valorOverride !== null ? valorOverride : valorInput
+    const novoValor = parseFloat(valorToUse)
     if (isNaN(novoValor)) {
       if (addAlerta) addAlerta('Valor inválido', 'warning')
       return
@@ -275,8 +298,174 @@ export default function Laboratorio() {
     const updated = { ...selectedOS, valor: novoValor }
     setOrdensServico(prev => prev.map(os => os.id === selectedOS.id ? updated : os))
     setSelectedOS(updated)
+    setValorInput(novoValor.toFixed(2))
     if (addAlerta) addAlerta('Valor salvo com sucesso!', 'success')
   }
+
+  // Abrir Modal de Registro de Desistência
+  const openDesistenciaModal = (os) => {
+    if (!os) return
+    let calculatedPecas = 0
+    if (os.pecas_usadas && os.pecas_usadas.length > 0) {
+      calculatedPecas = os.pecas_usadas.reduce((acc, p) => {
+        const item = estoque.find(e => e.id === p.id_item)
+        const preco = item ? (Number(item.preco_venda) || Number(item.preco_custo) || 0) : 0
+        return acc + (preco * (Number(p.quantidade) || 1))
+      }, 0)
+    } else if (os.valor_pecas) {
+      calculatedPecas = Number(os.valor_pecas)
+    }
+
+    setDesistenciaOS(os)
+    setDesistenciaForm({
+      valorPecas: calculatedPecas > 0 ? calculatedPecas.toFixed(2) : '',
+      valorReparo: os.valor ? Number(os.valor).toFixed(2) : '',
+      motivo: os.motivo_desistencia || 'Cliente achou o valor alto / desistiu',
+      devolverEstoque: Boolean(os.pecas_usadas && os.pecas_usadas.length > 0)
+    })
+  }
+
+  // Confirmar Desistência e Gravar no DB + Sugestões
+  const handleConfirmDesistencia = async () => {
+    if (!desistenciaOS) return
+    setSavingDesistencia(true)
+    try {
+      const vPecas = parseFloat(desistenciaForm.valorPecas) || 0
+      const vReparo = parseFloat(desistenciaForm.valorReparo) || 0
+      const motivo = desistenciaForm.motivo || 'Desistência do cliente'
+
+      // 1. Atualizar OS no banco
+      const updates = {
+        status: 'desistencia',
+        valor: vReparo,
+        valor_pecas: vPecas,
+        motivo_desistencia: motivo,
+        data_conclusao: new Date().toISOString()
+      }
+
+      const { error: osErr } = await supabase.from('ordens_servico').update(updates).eq('id', desistenciaOS.id)
+      if (osErr) throw osErr
+
+      // 2. Salvar na tabela sugestoes_orcamento para criar a inteligência de preços
+      const novaSugestao = {
+        modelo: desistenciaOS.modelo,
+        tipo_aparelho: desistenciaOS.tipo_aparelho || 'Celular',
+        problema: desistenciaOS.problema || 'Geral',
+        valor_pecas: vPecas,
+        valor_reparo: vReparo,
+        motivo: motivo,
+        id_os: desistenciaOS.id,
+        origem: 'desistencia'
+      }
+
+      const { data: sugCreated, error: sugErr } = await supabase.from('sugestoes_orcamento').insert([novaSugestao]).select()
+      if (!sugErr && sugCreated && setSugestoesOrcamento) {
+        setSugestoesOrcamento(prev => [sugCreated[0], ...(prev || [])])
+      }
+
+      // 3. Devolver peças ao estoque se configurado
+      if (desistenciaForm.devolverEstoque && desistenciaOS.pecas_usadas?.length > 0) {
+        let estoqueAtualizado = [...estoque]
+        for (const p of desistenciaOS.pecas_usadas) {
+          const item = estoqueAtualizado.find(e => e.id === p.id_item)
+          if (item) {
+            const novaQtd = (Number(item.quantidade) || 0) + (Number(p.quantidade) || 1)
+            await supabase.from('estoque').update({ quantidade: novaQtd }).eq('id', item.id)
+            estoqueAtualizado = estoqueAtualizado.map(e => e.id === item.id ? { ...e, quantidade: novaQtd } : e)
+          }
+        }
+        setEstoque(estoqueAtualizado)
+      }
+
+      // 4. Atualizar estados locais
+      const updatedOS = { ...desistenciaOS, ...updates }
+      setOrdensServico(prev => prev.map(os => os.id === desistenciaOS.id ? updatedOS : os))
+      if (selectedOS && selectedOS.id === desistenciaOS.id) {
+        setSelectedOS(updatedOS)
+      }
+
+      if (addAtividade) {
+        addAtividade(
+          'Desistência Registrada',
+          `OS #${desistenciaOS.id} (${desistenciaOS.modelo}) arquivada como desistência. Peças: R$ ${vPecas.toFixed(2)} | Reparo: R$ ${vReparo.toFixed(2)}`,
+          'laboratorio'
+        )
+      }
+
+      if (addAlerta) {
+        addAlerta(`Desistência da OS #${desistenciaOS.id} registrada! Valor das peças (R$ ${vPecas.toFixed(2)}) e conserto (R$ ${vReparo.toFixed(2)}) salvos como sugestão no banco.`, 'success')
+      }
+
+      setDesistenciaOS(null)
+    } catch (err) {
+      console.error('Erro ao registrar desistência:', err)
+      if (addAlerta) addAlerta('Erro ao salvar desistência no banco.', 'error')
+    } finally {
+      setSavingDesistencia(false)
+    }
+  }
+
+  // Sugestão Inteligente de Preço baseada em histórico de desistências e reparos
+  const activeSuggestion = useMemo(() => {
+    if (!selectedOS || !selectedOS.modelo) return null
+    const modeloLower = selectedOS.modelo.toLowerCase().trim()
+    
+    // Sugestões salvas especificamente na tabela
+    const matchesSugestoes = (sugestoesOrcamento || []).filter(s => 
+      s.modelo && (s.modelo.toLowerCase().includes(modeloLower) || modeloLower.includes(s.modelo.toLowerCase()))
+    )
+
+    // Outras OS anteriores com o mesmo modelo
+    const matchesOS = (ordensServico || []).filter(os => 
+      os.id !== selectedOS.id && 
+      os.modelo && 
+      (os.modelo.toLowerCase().includes(modeloLower) || modeloLower.includes(os.modelo.toLowerCase())) &&
+      (Number(os.valor) > 0 || Number(os.valor_pecas) > 0)
+    )
+
+    const total = matchesSugestoes.length + matchesOS.length
+    if (total === 0) return null
+
+    let sumReparo = 0
+    let countReparo = 0
+    let sumPecas = 0
+    let countPecas = 0
+    const motivos = []
+
+    matchesSugestoes.forEach(s => {
+      if (Number(s.valor_reparo) > 0) {
+        sumReparo += Number(s.valor_reparo)
+        countReparo++
+      }
+      if (Number(s.valor_pecas) > 0) {
+        sumPecas += Number(s.valor_pecas)
+        countPecas++
+      }
+      if (s.motivo) motivos.push(s.motivo)
+    })
+
+    matchesOS.forEach(o => {
+      if (Number(o.valor) > 0) {
+        sumReparo += Number(o.valor)
+        countReparo++
+      }
+      if (Number(o.valor_pecas) > 0) {
+        sumPecas += Number(o.valor_pecas)
+        countPecas++
+      }
+      if (o.motivo_desistencia) motivos.push(o.motivo_desistencia)
+    })
+
+    const avgReparo = countReparo > 0 ? (sumReparo / countReparo) : 0
+    const avgPecas = countPecas > 0 ? (sumPecas / countPecas) : 0
+
+    return {
+      count: total,
+      avgReparo,
+      avgPecas,
+      recentMotivos: motivos.slice(0, 3)
+    }
+  }, [selectedOS, sugestoesOrcamento, ordensServico])
 
   const handleSaveChecklistAndSenha = async (newChecklist, newSenha) => {
     if (!selectedOS) return
@@ -517,6 +706,7 @@ export default function Laboratorio() {
     { key: 'aguardando-peca', label: 'Aguardando Peça' },
     { key: 'em-reparo', label: 'Em Reparo' },
     { key: 'pronto', label: 'Prontos' },
+    { key: 'desistencia', label: 'Desistência' },
   ]
 
   // Render a Single Kanban Card
@@ -586,25 +776,41 @@ export default function Laboratorio() {
           paddingTop: '8px',
           fontSize: '0.75rem' 
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-            {os.valor ? (
-              <span style={{ color: 'var(--success, #25D366)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <DollarSign size={12} /> R$ {os.valor.toFixed(2)}
+          {os.status === 'desistencia' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ color: '#EF4444', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <Ban size={11} /> Desistência
               </span>
-            ) : (
-              <span style={{ color: 'var(--text-muted, #666)' }}>Sem valor</span>
-            )}
-            {isHeating && (
-              <span title="Requer Separadora Térmica" style={{ color: 'var(--danger, #FF4444)', display: 'flex', alignItems: 'center' }}>
-                <Flame size={13} />
-              </span>
-            )}
-            {os.pecas_usadas?.length > 0 && (
-              <span title={`${os.pecas_usadas.length} peças vinculadas`} style={{ color: 'var(--info, #3B82F6)', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                <Package size={12} /> {os.pecas_usadas.length}
-              </span>
-            )}
-          </div>
+              <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem' }}>
+                {Number(os.valor_pecas) > 0 && (
+                  <span style={{ color: '#FFAA00' }}>Peças: R${Number(os.valor_pecas).toFixed(0)}</span>
+                )}
+                {Number(os.valor) > 0 && (
+                  <span style={{ color: '#25D366' }}>Orç: R${Number(os.valor).toFixed(0)}</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {os.valor ? (
+                <span style={{ color: 'var(--success, #25D366)', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <DollarSign size={12} /> R$ {os.valor.toFixed(2)}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--text-muted, #666)' }}>Sem valor</span>
+              )}
+              {isHeating && (
+                <span title="Requer Separadora Térmica" style={{ color: 'var(--danger, #FF4444)', display: 'flex', alignItems: 'center' }}>
+                  <Flame size={13} />
+                </span>
+              )}
+              {os.pecas_usadas?.length > 0 && (
+                <span title={`${os.pecas_usadas.length} peças vinculadas`} style={{ color: 'var(--info, #3B82F6)', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <Package size={12} /> {os.pecas_usadas.length}
+                </span>
+              )}
+            </div>
+          )}
 
           <div style={{ display: 'flex', gap: '6px' }}>
             {/* WhatsApp button */}
@@ -713,7 +919,11 @@ export default function Laboratorio() {
         {/* Bottom row: Value and Action Button */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {os.valor ? (
+            {os.status === 'desistencia' ? (
+              <span style={{ color: '#EF4444', fontWeight: '700', fontSize: '0.85rem' }}>
+                🚫 Desistência {Number(os.valor_pecas) > 0 ? `• Peças: R$ ${Number(os.valor_pecas).toFixed(2)}` : ''}
+              </span>
+            ) : os.valor ? (
               <span style={{ fontWeight: '800', fontSize: '0.95rem', color: 'var(--accent-yellow, #FFD700)' }}>
                 R$ {os.valor.toFixed(2)}
               </span>
@@ -1197,10 +1407,58 @@ export default function Laboratorio() {
                           onChange={e => setValorInput(e.target.value)} 
                           style={{ flex: 1, padding: '8px' }} 
                         />
-                        <button className="btn btn-secondary" onClick={handleSaveValor}>Salvar Valor</button>
+                        <button className="btn btn-secondary" onClick={() => handleSaveValor()}>Salvar Valor</button>
                       </div>
                     ) : (
                        <div style={{ fontWeight: '700', color: 'var(--accent-yellow)' }}>R$ {selectedOS.valor?.toFixed(2)}</div>
+                    )}
+
+                    {/* Sugestão Inteligente de Preço do DB */}
+                    {activeSuggestion && (
+                      <div style={{
+                        marginTop: '10px',
+                        padding: '10px 12px',
+                        background: 'rgba(255, 215, 0, 0.08)',
+                        border: '1px solid rgba(255, 215, 0, 0.3)',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: 'var(--accent-yellow, #FFD700)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                            <Sparkles size={14} /> Sugestão Inteligente ({activeSuggestion.count} no DB)
+                          </span>
+                          {selectedOS.status !== 'entregue' && (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              onClick={() => handleSaveValor(activeSuggestion.avgReparo)}
+                              style={{
+                                backgroundColor: 'var(--accent-yellow, #FFD700)',
+                                color: '#000',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                padding: '3px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer'
+                              }}
+                              title="Preencher e salvar este valor sugerido na OS"
+                            >
+                              Usar R$ {activeSuggestion.avgReparo.toFixed(2)}
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', fontSize: '0.78rem', color: '#e0e0e0', flexWrap: 'wrap' }}>
+                          <div>Reparo Médio: <strong style={{ color: '#fff' }}>R$ {activeSuggestion.avgReparo.toFixed(2)}</strong></div>
+                          <div>Peças Estimadas: <strong style={{ color: '#FFAA00' }}>R$ {activeSuggestion.avgPecas.toFixed(2)}</strong></div>
+                          {activeSuggestion.avgReparo > activeSuggestion.avgPecas && (
+                            <div>Mão de Obra: <strong style={{ color: '#25D366' }}>R$ {(activeSuggestion.avgReparo - activeSuggestion.avgPecas).toFixed(2)}</strong></div>
+                          )}
+                        </div>
+                        {activeSuggestion.recentMotivos?.length > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted, #888)', marginTop: '4px' }}>
+                            Último motivo: "{activeSuggestion.recentMotivos[0]}"
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -1234,7 +1492,37 @@ export default function Laboratorio() {
               </div>
 
               {/* Status Actions */}
-              {selectedOS.status !== 'pronto' && selectedOS.status !== 'entregue' && (
+              {selectedOS.status === 'desistencia' ? (
+                <div style={{
+                  marginBottom: '24px',
+                  padding: '14px',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444', fontWeight: 'bold' }}>
+                    <Ban size={18} /> OS Registrada como Desistência
+                  </div>
+                  <div style={{ marginTop: '8px', fontSize: '0.85rem', color: '#ccc' }}>
+                    <div><strong>Valor das Peças Registrado:</strong> R$ {Number(selectedOS.valor_pecas || 0).toFixed(2)}</div>
+                    <div><strong>Valor do Orçamento Registrado:</strong> R$ {Number(selectedOS.valor || 0).toFixed(2)}</div>
+                    {selectedOS.motivo_desistencia && (
+                      <div style={{ marginTop: '4px' }}><strong>Motivo:</strong> {selectedOS.motivo_desistencia}</div>
+                    )}
+                    <div style={{ marginTop: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      💡 Estes valores foram salvos no banco de dados e servem como sugestão de preço inteligente para os próximos orçamentos deste modelo.
+                    </div>
+                  </div>
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn btn-secondary" style={{ fontSize: '12px' }} onClick={() => openDesistenciaModal(selectedOS)}>
+                      Editar Valores da Desistência
+                    </button>
+                    <button className="btn btn-secondary" style={{ fontSize: '12px' }} onClick={() => handleUpdateStatus('na-fila')}>
+                      <Undo2 size={12} style={{ marginRight: '4px' }} /> Reabrir OS (Na Fila)
+                    </button>
+                  </div>
+                </div>
+              ) : selectedOS.status !== 'pronto' && selectedOS.status !== 'entregue' ? (
                 <div style={{ marginBottom: '24px' }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Atualizar Status</label>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1248,9 +1536,26 @@ export default function Laboratorio() {
                         <Pause size={14} /> Aguardando Peça
                       </button>
                     )}
+                    <button 
+                      type="button"
+                      className="btn"
+                      onClick={() => openDesistenciaModal(selectedOS)}
+                      style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        color: '#EF4444',
+                        border: '1px solid #EF4444',
+                        fontWeight: '600',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      title="Registrar desistência do cliente e gravar valor das peças e conserto no banco"
+                    >
+                      <Ban size={14} /> Registrar Desistência
+                    </button>
                   </div>
                 </div>
-              )}
+              ) : null}
 
               {selectedOS.status === 'pronto' && (
                 <div style={{ marginBottom: '24px' }}>
@@ -1347,6 +1652,144 @@ export default function Laboratorio() {
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Registro de Desistência com Valor de Peças e Orçamento */}
+      {desistenciaOS && (
+        <div className="modal-overlay" onClick={() => !savingDesistencia && setDesistenciaOS(null)}>
+          <div className="modal" style={{ maxWidth: '520px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444' }}>
+                <Ban size={20} /> Registrar Desistência — OS #{desistenciaOS.id}
+              </h3>
+              <button 
+                className="btn-icon" 
+                onClick={() => !savingDesistencia && setDesistenciaOS(null)}
+                disabled={savingDesistencia}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                borderRadius: '8px',
+                padding: '12px 14px',
+                marginBottom: '18px',
+                fontSize: '0.85rem',
+                lineHeight: '1.4',
+                color: '#e5e7eb'
+              }}>
+                💡 <strong>Inteligência de Orçamentos:</strong> Ao registrar a desistência, o sistema anotará o valor das peças e o valor do conserto no banco de dados. Esses dados serão usados como <strong>sugestão automática de preço</strong> em orçamentos futuros para este modelo.
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.85rem' }}>
+                  Aparelho & Defeito
+                </label>
+                <div style={{ padding: '8px 12px', background: 'var(--bg-hover)', borderRadius: '6px', fontSize: '0.88rem' }}>
+                  <strong>{desistenciaOS.tipo_aparelho} • {desistenciaOS.modelo}</strong>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '2px' }}>{desistenciaOS.problema}</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.85rem', color: '#FFAA00' }}>
+                    Valor das Peças (R$) *
+                  </label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="form-input"
+                    placeholder="0.00"
+                    value={desistenciaForm.valorPecas}
+                    onChange={e => setDesistenciaForm({ ...desistenciaForm, valorPecas: e.target.value })}
+                    style={{ width: '100%', padding: '10px' }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Custo / Venda das peças</span>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.85rem', color: 'var(--accent-yellow, #FFD700)' }}>
+                    Valor do Reparo (R$) *
+                  </label>
+                  <input 
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="form-input"
+                    placeholder="0.00"
+                    value={desistenciaForm.valorReparo}
+                    onChange={e => setDesistenciaForm({ ...desistenciaForm, valorReparo: e.target.value })}
+                    style={{ width: '100%', padding: '10px' }}
+                    required
+                  />
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Orçamento total cobrado</span>
+                </div>
+              </div>
+
+              {desistenciaOS.pecas_usadas?.length > 0 && (
+                <div className="form-group" style={{ marginBottom: '16px', padding: '10px 12px', background: 'var(--bg-hover)', borderRadius: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#fff' }}>
+                    <input 
+                      type="checkbox"
+                      checked={desistenciaForm.devolverEstoque}
+                      onChange={e => setDesistenciaForm({ ...desistenciaForm, devolverEstoque: e.target.checked })}
+                    />
+                    <span><strong>Devolver {desistenciaOS.pecas_usadas.length} peça(s) ao estoque</strong> (reverter baixa física das peças)</span>
+                  </label>
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', fontSize: '0.85rem' }}>
+                  Motivo da Desistência
+                </label>
+                <input 
+                  type="text"
+                  className="form-input"
+                  placeholder="Ex: Cliente achou o valor alto / comprou outro aparelho"
+                  value={desistenciaForm.motivo}
+                  onChange={e => setDesistenciaForm({ ...desistenciaForm, motivo: e.target.value })}
+                  style={{ width: '100%', padding: '10px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setDesistenciaOS(null)}
+                  disabled={savingDesistencia}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button" 
+                  className="btn" 
+                  onClick={handleConfirmDesistencia}
+                  disabled={savingDesistencia}
+                  style={{ 
+                    backgroundColor: '#EF4444', 
+                    color: '#fff', 
+                    fontWeight: '700',
+                    padding: '10px 18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: savingDesistencia ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {savingDesistencia ? 'Gravando no DB...' : 'Salvar Desistência & Gravar Sugestão'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

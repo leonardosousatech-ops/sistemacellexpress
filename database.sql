@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS public.ordens_servico (
     prioridade TEXT DEFAULT 'normal',
     id_tecnico INTEGER REFERENCES public.funcionarios(id) ON DELETE SET NULL,
     valor DECIMAL(10, 2),
+    valor_pecas DECIMAL(10, 2) DEFAULT 0,
+    motivo_desistencia TEXT,
     data_entrada TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
     data_conclusao TIMESTAMP WITH TIME ZONE,
     garantia_ate DATE,
@@ -78,6 +80,20 @@ CREATE TABLE IF NOT EXISTS public.atividades (
     detalhes TEXT,
     modulo TEXT,
     data_hora TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- 7. Tabela de Sugestões de Orçamento e Histórico de Preços
+CREATE TABLE IF NOT EXISTS public.sugestoes_orcamento (
+    id SERIAL PRIMARY KEY,
+    modelo TEXT NOT NULL,
+    tipo_aparelho TEXT,
+    problema TEXT,
+    valor_pecas DECIMAL(10, 2) DEFAULT 0,
+    valor_reparo DECIMAL(10, 2) DEFAULT 0,
+    id_os INTEGER REFERENCES public.ordens_servico(id) ON DELETE SET NULL,
+    motivo TEXT,
+    origem TEXT DEFAULT 'desistencia',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
 -- Inserir alguns dados iniciais

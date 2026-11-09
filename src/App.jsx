@@ -32,6 +32,7 @@ function App() {
   const [financeiro, setFinanceiro] = useState([])
   const [funcionarios, setFuncionarios] = useState([])
   const [atividades, setAtividades] = useState([])
+  const [sugestoesOrcamento, setSugestoesOrcamento] = useState([])
   const [alertas, setAlertas] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -117,14 +118,16 @@ function App() {
         { data: estoqueData },
         { data: financeiroData },
         { data: funcData },
-        { data: ativData }
+        { data: ativData },
+        { data: sugData }
       ] = await Promise.all([
         supabase.from('clientes').select('*').order('id', { ascending: false }),
         supabase.from('ordens_servico').select('*').order('id', { ascending: false }),
         supabase.from('estoque').select('*').order('nome', { ascending: true }),
         supabase.from('financeiro').select('*').order('data', { ascending: false }),
         supabase.from('funcionarios').select('*').order('nome', { ascending: true }),
-        supabase.from('atividades').select('*').order('data_hora', { ascending: false })
+        supabase.from('atividades').select('*').order('data_hora', { ascending: false }),
+        supabase.from('sugestoes_orcamento').select('*').order('created_at', { ascending: false })
       ])
 
       setClientes(clientesData || [])
@@ -133,6 +136,7 @@ function App() {
       setFinanceiro(financeiroData || [])
       setFuncionarios(funcData || [])
       setAtividades(ativData || [])
+      setSugestoesOrcamento(sugData || [])
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     } finally {
@@ -210,6 +214,7 @@ function App() {
     financeiro, setFinanceiro,
     funcionarios, setFuncionarios,
     atividades, setAtividades,
+    sugestoesOrcamento, setSugestoesOrcamento,
     alertas, addAlerta,
     addAtividade,
   }
